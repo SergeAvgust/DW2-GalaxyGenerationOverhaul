@@ -1,0 +1,67 @@
+{
+  "fields": [
+    {
+      "key": "ArmCount",
+      "type": "int",
+      "label": "Spiral arms",
+      "description": "Number of spiral arms.",
+      "min": 2,
+      "max": 8,
+      "default": 5
+    },
+    {
+      "key": "ArmPitchDegrees",
+      "type": "float",
+      "label": "Arm pitch (degrees)",
+      "description": "How open the arms are. Small = tightly wound, large = loosely wound.",
+      "min": 5,
+      "max": 45,
+      "default": 18
+    },
+    {
+      "key": "ArmSpreadDegrees",
+      "type": "float",
+      "label": "Arm width (degrees)",
+      "description": "Angular scatter of stars around the arm centre line. Small = thin, pronounced arms.",
+      "min": 2,
+      "max": 30,
+      "default": 11
+    },
+    {
+      "key": "CoreRadius",
+      "type": "float",
+      "label": "Core size",
+      "description": "Radius of the central blob as a fraction of the galaxy radius.",
+      "min": 0.05,
+      "max": 0.5,
+      "default": 0.2
+    },
+    {
+      "key": "CoreShare",
+      "type": "float",
+      "label": "Core star share",
+      "description": "Fraction of all stars placed in the central blob.",
+      "min": 0,
+      "max": 0.6,
+      "default": 0.15
+    },
+    {
+      "key": "FieldShare",
+      "type": "float",
+      "label": "Between-arm star share",
+      "description": "Fraction of stars scattered between the arms, so the gaps are sparse rather than empty.",
+      "min": 0,
+      "max": 0.5,
+      "default": 0.1
+    },
+    {
+      "key": "EdgeThinning",
+      "type": "float",
+      "label": "Edge thinning",
+      "description": "How quickly star density falls off toward the rim. 0.5 = uniform density, higher = thinner outskirts.",
+      "min": 0.5,
+      "max": 1.5,
+      "default": 0.85
+    }
+  ]
+}

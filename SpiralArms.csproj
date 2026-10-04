@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SpiralArms</AssemblyName>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
+    <DebugType>none</DebugType>
+    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Distant Worlds 2</GameDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="DistantWorlds.Types">
+      <HintPath>$(GameDir)\DistantWorlds.Types.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameDir)\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="settings.schema.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

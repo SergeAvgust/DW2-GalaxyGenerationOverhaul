@@ -1,0 +1,12 @@
+{
+  "launcher": {
+    "injection": {
+      "dll": "SpiralArms.dll",
+      "entryPoint": "SpiralArms.Bootstrap.Init"
+    }
+  },
+  "displayName": "Spiral Arms",
+  "description": "Spiral galaxies get real spiral arms (4-6 by default), a dense central bulge, and stars thinning out toward the rim. Only the Spiral shape is affected; other shapes are untouched.",
+  "version": "0.1.0",
+  "bundles": []
+}
