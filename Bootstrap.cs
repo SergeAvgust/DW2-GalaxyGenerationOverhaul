@@ -1,11 +1,11 @@
 using System.Reflection;
-using System.Text.Json;
 using DistantWorlds.Types;
 using HarmonyLib;
 
 namespace SpiralArms;
 
-// Entry point invoked by the launcher's loader (see DW2-Mod-Launcher/docs/DLL Injection.md).
+// Entry point invoked by the launcher's loader (see DW2-Mod-Launcher/docs/DLL Injection.md). The options are chosen on the
+// new-game screen (SpiralUi) and held in SpiralSettings.
 //
 // Vanilla places every star of a Spiral (and Elliptical) galaxy with Galaxy.DeterminePointCenterEased:
 //   angle = U*2pi, r = R*U^0.7, point = (R,R) + r*(cos, sin)      (R = Dimensions/2)
@@ -15,61 +15,11 @@ public static class Bootstrap
 {
     private const float TwoPi = MathF.PI * 2f;
 
-    private static bool _started;
-    private static string _logPath = string.Empty;
-
-    private static int _armCount = 5;
-    private static float _pitchRad = 18f * MathF.PI / 180f;
-    private static float _spreadRad = 11f * MathF.PI / 180f;
-    private static float _coreRadius = 0.2f;
-    private static float _coreShare = 0.15f;
-    private static float _fieldShare = 0.1f;
-    private static float _edgeThinning = 0.85f;
-    private static float _armTaper = 1.3f;
     // Vanilla-style winding mirrored once and for all (no setting).
     private const float WindSign = -1f;
-    private static bool _nebulasBetweenArms;
 
-    public static void InitWithOptions(string json)
-    {
-        _logPath = Path.Combine(Path.GetTempPath(), "SpiralArms.log");
-        try
-        {
-            using JsonDocument doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
-            foreach (JsonProperty p in doc.RootElement.EnumerateObject())
-            {
-                if (p.Value.ValueKind == JsonValueKind.String)
-                {
-                    if (p.Name.Equals("NebulaPlacement", StringComparison.OrdinalIgnoreCase))
-                    {
-                        _nebulasBetweenArms = (p.Value.GetString() ?? "").Replace(" ", "").Equals("BetweenArms", StringComparison.OrdinalIgnoreCase);
-                    }
-                    continue;
-                }
-                if (p.Value.ValueKind != JsonValueKind.Number)
-                {
-                    continue;
-                }
-                float v = p.Value.GetSingle();
-                switch (p.Name.ToLowerInvariant())
-                {
-                    case "armcount": _armCount = Math.Clamp((int)MathF.Round(v), 2, 8); break;
-                    case "armpitchdegrees": _pitchRad = Math.Clamp(v, 5f, 45f) * MathF.PI / 180f; break;
-                    case "armspreaddegrees": _spreadRad = Math.Clamp(v, 2f, 30f) * MathF.PI / 180f; break;
-                    case "coreradius": _coreRadius = Math.Clamp(v, 0.05f, 0.5f); break;
-                    case "coreshare": _coreShare = Math.Clamp(v, 0f, 0.6f); break;
-                    case "fieldshare": _fieldShare = Math.Clamp(v, 0f, 0.5f); break;
-                    case "edgethinning": _edgeThinning = Math.Clamp(v, 0.5f, 1.5f); break;
-                    case "armtaper": _armTaper = Math.Clamp(v, 0f, 2f); break;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Log("Failed to parse settings, using defaults: " + ex.Message);
-        }
-        Init();
-    }
+    private static bool _started;
+    private static string _logPath = string.Empty;
 
     public static void Init()
     {
@@ -104,7 +54,9 @@ public static class Bootstrap
             {
                 harmony.Patch(cloudTarget, prefix: new HarmonyMethod(typeof(Bootstrap).GetMethod(nameof(CloudPrefix), BindingFlags.Static | BindingFlags.NonPublic)));
             }
-            Log($"PATCH OK. arms={_armCount} pitch={_pitchRad:F3}rad spread={_spreadRad:F3}rad core={_coreRadius} coreShare={_coreShare} fieldShare={_fieldShare} thinning={_edgeThinning} taper={_armTaper}");
+            Log($"PATCH OK. arms={SpiralSettings.ArmCount} pitch={SpiralSettings.PitchRad:F3}rad spread={SpiralSettings.SpreadRad:F3}rad core={SpiralSettings.CoreRadius} coreShare={SpiralSettings.CoreShare} fieldShare={SpiralSettings.FieldShare} thinning={SpiralSettings.EdgeThinning} taper={SpiralSettings.ArmTaperValue}");
+
+            SpiralUi.Install(harmony);
         }
         catch (Exception ex)
         {
@@ -126,18 +78,18 @@ public static class Bootstrap
         try
         {
             float radius = centerRadius;
-            float coreR = _coreRadius * radius;
+            float coreR = SpiralSettings.CoreRadius * radius;
             float pick = (float)rnd.NextDouble();
             float r;
             float theta;
 
-            if (pick < _coreShare)
+            if (pick < SpiralSettings.CoreShare)
             {
                 // Central blob: uniform density inside the core disc.
                 r = coreR * MathF.Sqrt((float)rnd.NextDouble());
                 theta = (float)rnd.NextDouble() * TwoPi;
             }
-            else if (pick < _coreShare + _fieldShare)
+            else if (pick < SpiralSettings.CoreShare + SpiralSettings.FieldShare)
             {
                 // Sparse inter-arm field: same radial falloff as the arms, any angle.
                 r = RadialSample(rnd, coreR, radius);
@@ -147,10 +99,10 @@ public static class Bootstrap
             {
                 // Arm star: logarithmic spiral  theta = phase + arm*2pi/N + ln(r/r0)/tan(pitch), then scatter.
                 r = RadialSample(rnd, coreR, radius);
-                int arm = rnd.Next(_armCount);
+                int arm = rnd.Next(SpiralSettings.ArmCount);
                 float phase = ArmPhase(settings.RandomSeed);
-                float wind = WindSign * MathF.Log(r / coreR) / MathF.Tan(_pitchRad);
-                theta = phase + arm * TwoPi / _armCount + wind + Gaussian(rnd) * ArmSpread(r, radius);
+                float wind = WindSign * MathF.Log(r / coreR) / MathF.Tan(SpiralSettings.PitchRad);
+                theta = phase + arm * TwoPi / SpiralSettings.ArmCount + wind + Gaussian(rnd) * ArmSpread(r, radius);
             }
 
             x = Math.Clamp(radius + r * MathF.Cos(theta), 0f, 2f * radius);
@@ -186,15 +138,15 @@ public static class Bootstrap
         try
         {
             float galaxyRadius = settings.Dimensions * 0.5f;
-            float coreR = _coreRadius * galaxyRadius;
+            float coreR = SpiralSettings.CoreRadius * galaxyRadius;
             // Inside the arms: on the arm centre line. Between: halfway to the neighbouring arm.
-            float phase = ArmPhase(settings.RandomSeed) + (_nebulasBetweenArms ? MathF.PI / _armCount : 0f);
+            float phase = ArmPhase(settings.RandomSeed) + (SpiralSettings.NebulasBetweenArms ? MathF.PI / SpiralSettings.ArmCount : 0f);
 
             for (int attempt = 0; attempt < 100; attempt++)
             {
                 float r = RadialSample(rnd, coreR, galaxyRadius);
-                int arm = rnd.Next(_armCount);
-                float theta = phase + arm * TwoPi / _armCount + WindSign * MathF.Log(r / coreR) / MathF.Tan(_pitchRad) + Gaussian(rnd) * ArmSpread(r, galaxyRadius);
+                int arm = rnd.Next(SpiralSettings.ArmCount);
+                float theta = phase + arm * TwoPi / SpiralSettings.ArmCount + WindSign * MathF.Log(r / coreR) / MathF.Tan(SpiralSettings.PitchRad) + Gaussian(rnd) * ArmSpread(r, galaxyRadius);
 
                 x = galaxyRadius + r * MathF.Cos(theta);
                 y = galaxyRadius + r * MathF.Sin(theta);
@@ -222,14 +174,14 @@ public static class Bootstrap
     // 1 = constant physical width, above 1 = arms narrow toward the rim. The configured width applies at rRef = half radius.
     private static float ArmSpread(float r, float galaxyRadius)
     {
-        float scale = MathF.Pow(0.5f * galaxyRadius / Math.Max(r, 1f), _armTaper);
-        return _spreadRad * Math.Clamp(scale, 0.05f, 3f);
+        float scale = MathF.Pow(0.5f * galaxyRadius / Math.Max(r, 1f), SpiralSettings.ArmTaperValue);
+        return SpiralSettings.SpreadRad * Math.Clamp(scale, 0.05f, 3f);
     }
 
     // r = rMin + (rMax - rMin) * U^p.  p = 0.5 gives uniform area density; larger p thins the outskirts.
     private static float RadialSample(Random rnd, float rMin, float rMax)
     {
-        float t = MathF.Pow((float)rnd.NextDouble(), _edgeThinning);
+        float t = MathF.Pow((float)rnd.NextDouble(), SpiralSettings.EdgeThinning);
         return rMin + (rMax * 0.97f - rMin) * t;
     }
 
@@ -243,7 +195,7 @@ public static class Bootstrap
         return (float)(Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(TwoPi * u2));
     }
 
-    private static void Log(string message)
+    internal static void Log(string message)
     {
         try
         {

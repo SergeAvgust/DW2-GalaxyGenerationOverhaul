@@ -20,14 +20,23 @@
       <HintPath>$(GameDir)\DistantWorlds.Core.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="DistantWorlds.UI">
+      <HintPath>$(GameDir)\DistantWorlds.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Stride.Core.Mathematics">
+      <HintPath>$(GameDir)\Stride.Core.Mathematics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Stride.Graphics">
+      <HintPath>$(GameDir)\Stride.Graphics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="0Harmony">
       <HintPath>$(GameDir)\0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="settings.schema.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
 
 </Project>

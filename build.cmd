@@ -12,7 +12,6 @@ if errorlevel 1 exit /b 1
 
 if not exist "%MODDIR%" mkdir "%MODDIR%"
 copy /y "%OUT%\SpiralArms.dll" "%MODDIR%\" >nul || exit /b 1
-copy /y "%OUT%\settings.schema.json" "%MODDIR%\" >nul || exit /b 1
 copy /y "%~dp0mod.json" "%MODDIR%\" >nul || exit /b 1
 
 echo Deployed to %MODDIR%
