@@ -25,6 +25,10 @@ public static class Bootstrap
     private static float _coreShare = 0.15f;
     private static float _fieldShare = 0.1f;
     private static float _edgeThinning = 0.85f;
+    private static float _armTaper = 1.3f;
+    // Vanilla-style winding mirrored once and for all (no setting).
+    private const float WindSign = -1f;
+    private static bool _nebulasBetweenArms;
 
     public static void InitWithOptions(string json)
     {
@@ -34,6 +38,14 @@ public static class Bootstrap
             using JsonDocument doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
             foreach (JsonProperty p in doc.RootElement.EnumerateObject())
             {
+                if (p.Value.ValueKind == JsonValueKind.String)
+                {
+                    if (p.Name.Equals("NebulaPlacement", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _nebulasBetweenArms = (p.Value.GetString() ?? "").Replace(" ", "").Equals("BetweenArms", StringComparison.OrdinalIgnoreCase);
+                    }
+                    continue;
+                }
                 if (p.Value.ValueKind != JsonValueKind.Number)
                 {
                     continue;
@@ -48,6 +60,7 @@ public static class Bootstrap
                     case "coreshare": _coreShare = Math.Clamp(v, 0f, 0.6f); break;
                     case "fieldshare": _fieldShare = Math.Clamp(v, 0f, 0.5f); break;
                     case "edgethinning": _edgeThinning = Math.Clamp(v, 0.5f, 1.5f); break;
+                    case "armtaper": _armTaper = Math.Clamp(v, 0f, 2f); break;
                 }
             }
         }
@@ -81,7 +94,17 @@ public static class Bootstrap
 
             var harmony = new Harmony("spiralarms.dw2mod");
             harmony.Patch(target, prefix: new HarmonyMethod(typeof(Bootstrap).GetMethod(nameof(PlacePrefix), BindingFlags.Static | BindingFlags.NonPublic)));
-            Log($"PATCH OK. arms={_armCount} pitch={_pitchRad:F3}rad spread={_spreadRad:F3}rad core={_coreRadius} coreShare={_coreShare} fieldShare={_fieldShare} thinning={_edgeThinning}");
+
+            MethodInfo? cloudTarget = AccessTools.Method(typeof(Galaxy), "DetermineCloudSettingsSpiralArm");
+            if (cloudTarget == null)
+            {
+                Log("WARN: Galaxy.DetermineCloudSettingsSpiralArm not found; nebulae keep vanilla placement.");
+            }
+            else
+            {
+                harmony.Patch(cloudTarget, prefix: new HarmonyMethod(typeof(Bootstrap).GetMethod(nameof(CloudPrefix), BindingFlags.Static | BindingFlags.NonPublic)));
+            }
+            Log($"PATCH OK. arms={_armCount} pitch={_pitchRad:F3}rad spread={_spreadRad:F3}rad core={_coreRadius} coreShare={_coreShare} fieldShare={_fieldShare} thinning={_edgeThinning} taper={_armTaper}");
         }
         catch (Exception ex)
         {
@@ -126,8 +149,8 @@ public static class Bootstrap
                 r = RadialSample(rnd, coreR, radius);
                 int arm = rnd.Next(_armCount);
                 float phase = ArmPhase(settings.RandomSeed);
-                float wind = MathF.Log(r / coreR) / MathF.Tan(_pitchRad);
-                theta = phase + arm * TwoPi / _armCount + wind + Gaussian(rnd) * _spreadRad;
+                float wind = WindSign * MathF.Log(r / coreR) / MathF.Tan(_pitchRad);
+                theta = phase + arm * TwoPi / _armCount + wind + Gaussian(rnd) * ArmSpread(r, radius);
             }
 
             x = Math.Clamp(radius + r * MathF.Cos(theta), 0f, 2f * radius);
@@ -139,6 +162,68 @@ public static class Bootstrap
             Log("PlacePrefix error, falling back to vanilla: " + ex.Message);
             return true;
         }
+    }
+
+    // Vanilla DetermineCloudSettingsSpiralArm (shared by Classic and Spiral) walks a fixed 2-arm spiral from
+    // Calculations.CalculateSpiralPoint. For Spiral this replaces it with clouds that follow the star arms,
+    // either on them or in the lanes between them (NebulaPlacement setting).
+    // GenerateNebulae still decides *how many* clouds exist (from the NebulaDensity setting); this only decides where.
+    // Parameter names must match the original's. Mirrors the vanilla method's outputs and its 100-try
+    // rejection against overlapping clouds.
+    private static bool CloudPrefix(Galaxy __instance, Random rnd, GameStartSettings settings, float cloudSizeMinimum, float cloudSizeMaximum, float permeabilityMinimum, float permeabilityMaximum,
+        out float x, out float y, out float radius, out string name, out float permeability)
+    {
+        x = 0f;
+        y = 0f;
+        radius = 1f;
+        name = string.Empty;
+        permeability = 1f;
+        if (settings.Shape != GalaxyShape.Spiral)
+        {
+            return true;
+        }
+
+        try
+        {
+            float galaxyRadius = settings.Dimensions * 0.5f;
+            float coreR = _coreRadius * galaxyRadius;
+            // Inside the arms: on the arm centre line. Between: halfway to the neighbouring arm.
+            float phase = ArmPhase(settings.RandomSeed) + (_nebulasBetweenArms ? MathF.PI / _armCount : 0f);
+
+            for (int attempt = 0; attempt < 100; attempt++)
+            {
+                float r = RadialSample(rnd, coreR, galaxyRadius);
+                int arm = rnd.Next(_armCount);
+                float theta = phase + arm * TwoPi / _armCount + WindSign * MathF.Log(r / coreR) / MathF.Tan(_pitchRad) + Gaussian(rnd) * ArmSpread(r, galaxyRadius);
+
+                x = galaxyRadius + r * MathF.Cos(theta);
+                y = galaxyRadius + r * MathF.Sin(theta);
+                // Clouds grow toward the rim, as in vanilla (which scales by sqrt of the walk progress).
+                radius = (cloudSizeMinimum + (float)rnd.NextDouble() * (cloudSizeMaximum - cloudSizeMinimum)) * MathF.Sqrt(Math.Max(0.1f, r / galaxyRadius));
+
+                if (!__instance.NebulaClouds.CheckAnyWithinRange((int)x, (int)y, radius, 0.4f))
+                {
+                    break;
+                }
+            }
+
+            permeability = permeabilityMinimum + (float)rnd.NextDouble() * (permeabilityMaximum - permeabilityMinimum);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log("CloudPrefix error, falling back to vanilla: " + ex.Message);
+            return true;
+        }
+    }
+
+    // Angular scatter (radians, 1 sigma) of an arm at radius r. A constant angle makes the arm's physical
+    // width grow with r (wide at the rim). Scaling by (rRef/r)^taper counters that: taper 0 = constant angle,
+    // 1 = constant physical width, above 1 = arms narrow toward the rim. The configured width applies at rRef = half radius.
+    private static float ArmSpread(float r, float galaxyRadius)
+    {
+        float scale = MathF.Pow(0.5f * galaxyRadius / Math.Max(r, 1f), _armTaper);
+        return _spreadRad * Math.Clamp(scale, 0.05f, 3f);
     }
 
     // r = rMin + (rMax - rMin) * U^p.  p = 0.5 gives uniform area density; larger p thins the outskirts.

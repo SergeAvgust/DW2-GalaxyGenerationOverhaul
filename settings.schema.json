@@ -1,6 +1,14 @@
 {
   "fields": [
     {
+      "key": "NebulaPlacement",
+      "type": "enum",
+      "label": "Nebula placement",
+      "description": "Where nebula clouds go on Spiral galaxies: along the arms (among the stars) or in the gaps between arms. The number of clouds still follows the in-game nebula density setting.",
+      "options": ["Inside arms", "Between arms"],
+      "default": "Inside arms"
+    },
+    {
       "key": "ArmCount",
       "type": "int",
       "label": "Spiral arms",
@@ -26,6 +34,15 @@
       "min": 2,
       "max": 30,
       "default": 11
+    },
+    {
+      "key": "ArmTaper",
+      "type": "float",
+      "label": "Arm taper",
+      "description": "How arm width changes with distance from the centre. 0 = constant angle (arms get wider toward the rim), 1 = constant physical width, above 1 = arms get thinner toward the rim. Arm width above is measured at half the galaxy radius.",
+      "min": 0,
+      "max": 2,
+      "default": 1.3
     },
     {
       "key": "CoreRadius",

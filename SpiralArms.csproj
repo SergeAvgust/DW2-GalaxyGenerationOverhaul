@@ -16,6 +16,10 @@
       <HintPath>$(GameDir)\DistantWorlds.Types.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="DistantWorlds.Core">
+      <HintPath>$(GameDir)\DistantWorlds.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="0Harmony">
       <HintPath>$(GameDir)\0Harmony.dll</HintPath>
       <Private>False</Private>
