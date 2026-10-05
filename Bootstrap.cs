@@ -67,6 +67,8 @@ public static class Bootstrap
 
             Log($"PATCH OK. arms={SpiralSettings.ArmCount} pitch={SpiralSettings.PitchRad:F3}rad spread={SpiralSettings.SpreadRad:F3}rad core={SpiralSettings.CoreRadius} coreShare={SpiralSettings.CoreShare} fieldShare={SpiralSettings.FieldShare} thinning={SpiralSettings.EdgeThinning} taper={SpiralSettings.ArmTaperValue}");
 
+            Habitability.Install(harmony);
+            Exploration.Install(harmony);
             SpiralUi.Install(harmony);
         }
         catch (Exception ex)

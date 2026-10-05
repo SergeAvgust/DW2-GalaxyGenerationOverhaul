@@ -242,6 +242,39 @@ internal static class UiRows
         }
     }
 
+    // Rows for every shape, added to the colonization section of the dialog next to the vanilla Colony Prevalence row.
+    public static readonly UiRow[] Colonization =
+    {
+        new()
+        {
+            Group = "Colonization", Key = "PlanetQuality", Label = "Planet Quality", Options = Habitability.Quality, Shapes = Array.Empty<GalaxyShape>(),
+            Hint = "How good the planets are, as opposed to how many there are (that is Habitable Planets above). Higher quality gives habitable worlds larger, "
+                + "richer populations; lower quality leaves most of them marginal.",
+            Get = () => Habitability.QualityIndex, Set = i => Habitability.QualityIndex = i,
+        },
+    };
+
+    // The starting-situation step (home system, expansion, tech level, ...): rows about the player's empire.
+    public static readonly UiRow[] StartingSituation =
+    {
+        new()
+        {
+            Group = "StartingSituation", Key = "GalaxyKnowledge", Label = "Galaxy Knowledge", Options = Exploration.Modes, Shapes = Array.Empty<GalaxyShape>(),
+            Hint = "How much of the galaxy your empire knows at the start. Standard is the usual handful of nearby systems. Fully explored "
+                + "marks every system, planet, moon and asteroid as explored and surveyed to the maximum, so all resources, bonuses and facilities "
+                + "are known without sending survey ships (ruins still have to be investigated).",
+            Get = () => Exploration.ModeIndex, Set = i => Exploration.ModeIndex = i,
+        },
+    };
+
+    // Rows added to a section of the new-game dialog for every galaxy shape, keyed by the dialog's section index:
+    // 3 = colonization, 6 = your starting situation.
+    public static readonly Dictionary<int, UiRow[]> CommonBySection = new()
+    {
+        [3] = Colonization,
+        [6] = StartingSituation,
+    };
+
     public static readonly UiRow[] All = BaseRows
         .Concat(RingRows("RingNo", GalaxyShape.RingNoCenter, innerRing: false, center: false))
         .Concat(RingRows("RingDense", GalaxyShape.RingDenseCenter, innerRing: false, center: true))

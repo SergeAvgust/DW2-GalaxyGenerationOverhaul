@@ -80,6 +80,11 @@ internal static class SpiralUi
     // Parameter names must match the original's so Harmony can bind them by name.
     private static void PostAddControls(StartNewGameDialog __instance, Galaxy galaxy, Empire empire, DWPanel panel, int index)
     {
+        if (UiRows.CommonBySection.TryGetValue(index, out UiRow[]? common))
+        {
+            AddCommonRows(__instance, galaxy, empire, panel, index, common);
+            return;
+        }
         if (index != GalaxySectionIndex)
         {
             return;
@@ -115,30 +120,7 @@ internal static class SpiralUi
                 float y = firstY;
                 foreach (UiRow row in group)
                 {
-                    row.Controls.Clear();
-
-                    int count = row.Options.Length;
-                    var buttons = new ToggleButtonGroup { Name = NamePrefix + row.Key };
-                    buttons.Initialize((FontSize)1, (FontSize)2, null!);
-                    buttons.ClickEvent = OnChoice;
-                    buttons.Visible = true;
-                    buttons.SetSizeAndPosition(new Vector2(RowWidth(count, buttonWidth, buttonGap), buttonHeight), Vector2.Zero);
-                    for (int i = 0; i < count; i++)
-                    {
-                        buttons.AddButton($"{NamePrefix}{row.Key} {row.Options[i].Label}", row.Options[i].Label, (Texture)null!);
-                    }
-
-                    int before = panel.Controls.Count;
-                    object[] args = { galaxy, empire, panel, row.Label, row.Hint, buttons, labelWidth, lineHeight, gap, 0f, y };
-                    _addLabelledControl!.Invoke(__instance, args);
-                    y = (float)args[10];
-
-                    for (int i = before; i < panel.Controls.Count; i++)
-                    {
-                        row.Controls.Add(panel.Controls[i]);
-                    }
-                    row.Buttons = buttons;
-                    buttons.ToggleButton(Math.Clamp(row.Get(), 0, count - 1));
+                    BuildRow(__instance, galaxy, empire, panel, row, labelWidth, lineHeight, gap, buttonWidth, buttonGap, buttonHeight, ref y);
                 }
             }
             _rowCounterField.SetValue(__instance, stripeStart);
@@ -156,6 +138,67 @@ internal static class SpiralUi
         catch (Exception ex)
         {
             Bootstrap.Log("UI: building rows failed: " + ex);
+        }
+    }
+
+    // Builds one row (label, hover tip and buttons) at y and advances y past it.
+    private static void BuildRow(StartNewGameDialog dialog, Galaxy galaxy, Empire empire, DWPanel panel, UiRow row, float labelWidth, float lineHeight,
+        float gap, float buttonWidth, float buttonGap, float buttonHeight, ref float y)
+    {
+        row.Controls.Clear();
+
+        int count = row.Options.Length;
+        var buttons = new ToggleButtonGroup { Name = NamePrefix + row.Key };
+        buttons.Initialize((FontSize)1, (FontSize)2, null!);
+        buttons.ClickEvent = OnChoice;
+        buttons.Visible = true;
+        buttons.SetSizeAndPosition(new Vector2(RowWidth(count, buttonWidth, buttonGap), buttonHeight), Vector2.Zero);
+        for (int i = 0; i < count; i++)
+        {
+            buttons.AddButton($"{NamePrefix}{row.Key} {row.Options[i].Label}", row.Options[i].Label, (Texture)null!);
+        }
+
+        int before = panel.Controls.Count;
+        object[] args = { galaxy, empire, panel, row.Label, row.Hint, buttons, labelWidth, lineHeight, gap, 0f, y };
+        _addLabelledControl!.Invoke(dialog, args);
+        y = (float)args[10];
+
+        for (int i = before; i < panel.Controls.Count; i++)
+        {
+            row.Controls.Add(panel.Controls[i]);
+        }
+        row.Buttons = buttons;
+        buttons.ToggleButton(Math.Clamp(row.Get(), 0, count - 1));
+    }
+
+    // Rows that apply to every galaxy shape: appended below the vanilla rows of their section, always visible.
+    private static void AddCommonRows(StartNewGameDialog dialog, Galaxy galaxy, Empire empire, DWPanel panel, int section, UiRow[] rows)
+    {
+        try
+        {
+            _dialog = dialog;
+            float buttonWidth = UserInterfaceHelper.CalculateScaledValue(95f);
+            float buttonGap = UserInterfaceHelper.CalculateScaledValue(8f);
+            float buttonHeight = UserInterfaceHelper.CalculateScaledValue(35f);
+            float lineHeight = UserInterfaceHelper.CalculateScaledValue(25f);
+            float gap = UserInterfaceHelper.CalculateScaledValue(10f);
+            float labelWidth = (float)_labelWidthField!.GetValue(dialog)!;
+
+            float bottom = 0f;
+            foreach (DWControl c in panel.Controls)
+            {
+                bottom = Math.Max(bottom, c.Position.Y + c.Size.Y);
+            }
+            float y = bottom + gap * 0.5f;
+            foreach (UiRow row in rows)
+            {
+                BuildRow(dialog, galaxy, empire, panel, row, labelWidth, lineHeight, gap, buttonWidth, buttonGap, buttonHeight, ref y);
+            }
+            Bootstrap.Log($"UI: added {rows.Length} row(s) to section {section} below y={bottom:F0} (panel height {panel.Size.Y:F0}).");
+        }
+        catch (Exception ex)
+        {
+            Bootstrap.Log("UI: building common rows failed: " + ex);
         }
     }
 
@@ -221,7 +264,7 @@ internal static class SpiralUi
         {
             if (sender is ToggleButtonGroup group && group.Name != null && group.Name.StartsWith(NamePrefix, StringComparison.Ordinal))
             {
-                UiRow? row = Array.Find(Rows, r => NamePrefix + r.Key == group.Name);
+                UiRow? row = Array.Find(Rows, r => NamePrefix + r.Key == group.Name) ?? UiRows.CommonBySection.Values.SelectMany(r => r).FirstOrDefault(r => NamePrefix + r.Key == group.Name);
                 if (row != null && group.ToggledButtonIndex >= 0)
                 {
                     row.Set(group.ToggledButtonIndex);

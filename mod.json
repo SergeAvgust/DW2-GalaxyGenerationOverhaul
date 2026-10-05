@@ -1,12 +1,6 @@
 {
-  "launcher": {
-    "injection": {
-      "dll": "SpiralArms.dll",
-      "entryPoint": "SpiralArms.Bootstrap.Init"
-    }
-  },
   "displayName": "Spiral Arms",
-  "description": "Adds options to the galaxy settings screen of the new-game dialog: real spiral arms for Spiral galaxies, and shape controls for Elliptical, Classic, Ring, Cluster and Irregular galaxies. Defaults reproduce the standard galaxies.",
-  "version": "0.2.0",
+  "description": "Adds options to the galaxy settings screen of the new-game dialog: real spiral arms for Spiral galaxies, shape controls for Elliptical, Classic, Ring, Cluster and Irregular galaxies, and a split of the Colony Prevalence setting into habitable-planet frequency (the vanilla button) and planet quality (a new row). Defaults reproduce the standard galaxies.",
+  "version": "0.3.0",
   "bundles": []
 }
