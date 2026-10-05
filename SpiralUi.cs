@@ -7,83 +7,29 @@ using Stride.Graphics;
 
 namespace SpiralArms;
 
-// Adds the Spiral options as extra rows at the bottom of the galaxy settings section (section 0) of the
+// Adds the shape options (see UiRows) as extra rows at the bottom of the galaxy settings section (section 0) of the
 // new-game dialog. Rows are built the way the game builds its own (a ToggleButtonGroup handed to the dialog's
 // private AddLabelledControl, which adds the striped back panel and the label with its hover tip), so they look
-// and behave like the originals. They only show while the Spiral shape is selected, and a click goes through the
-// dialog's own GalaxySettingsChangedPreProcess so the galaxy preview regenerates with the new values.
+// and behave like the originals. Each shape shows only its own rows, and a click goes through the dialog's own
+// GalaxySettingsChangedPreProcess so the galaxy preview regenerates with the new values.
 internal static class SpiralUi
 {
     private const string NamePrefix = "SpiralArms_";
     private const int GalaxySectionIndex = 0;
 
-    private sealed class Row
-    {
-        public required string Key;
-        public required string Label;
-        public required string Hint;
-        public required SpiralSettings.Option[] Options;
-        public required Func<int> Get;
-        public required Action<int> Set;
-        public readonly List<DWControl> Controls = new();
-    }
-
-    private static readonly Row[] Rows =
-    {
-        new()
-        {
-            Key = "Arms", Label = "Spiral Arms", Options = SpiralSettings.ArmCounts,
-            Hint = "Number of spiral arms. Two arms with a large core give a barred-spiral look; more arms give a busier, more tightly packed spiral.",
-            Get = () => SpiralSettings.ArmCountIndex, Set = i => SpiralSettings.ArmCountIndex = i,
-        },
-        new()
-        {
-            Key = "Winding", Label = "Arm Winding", Options = SpiralSettings.Winding,
-            Hint = "How tightly the arms wind around the core. Tight arms circle the galaxy several times; loose arms sweep outward more directly.",
-            Get = () => SpiralSettings.WindingIndex, Set = i => SpiralSettings.WindingIndex = i,
-        },
-        new()
-        {
-            Key = "Width", Label = "Arm Width", Options = SpiralSettings.ArmWidth,
-            Hint = "How far stars scatter from the centre line of each arm. Thin arms are sharply defined; wide arms blur into the gaps between them.",
-            Get = () => SpiralSettings.ArmWidthIndex, Set = i => SpiralSettings.ArmWidthIndex = i,
-        },
-        new()
-        {
-            Key = "Taper", Label = "Arm Taper", Options = SpiralSettings.ArmTaper,
-            Hint = "How the arms change in width toward the rim. None lets arms widen with distance from the core; stronger settings make them narrower and sharper at the edge of the galaxy.",
-            Get = () => SpiralSettings.ArmTaperIndex, Set = i => SpiralSettings.ArmTaperIndex = i,
-        },
-        new()
-        {
-            Key = "Core", Label = "Core Size", Options = SpiralSettings.CoreSize,
-            Hint = "Size of the dense central blob. Its star density stays the same, so a larger core holds proportionally more of the galaxy's stars.",
-            Get = () => SpiralSettings.CoreSizeIndex, Set = i => SpiralSettings.CoreSizeIndex = i,
-        },
-        new()
-        {
-            Key = "Rim", Label = "Rim Thinning", Options = SpiralSettings.RimThinning,
-            Hint = "How quickly star density falls off toward the rim. None keeps the density even all the way out; stronger settings leave the outskirts sparse.",
-            Get = () => SpiralSettings.RimThinningIndex, Set = i => SpiralSettings.RimThinningIndex = i,
-        },
-        new()
-        {
-            Key = "Nebulae", Label = "Nebula Placement", Options = SpiralSettings.NebulaPlacement,
-            Hint = "Where nebula clouds appear: along the arms, among the stars, or in the gaps between the arms. The nebula density setting above still controls how many there are.",
-            Get = () => SpiralSettings.NebulaPlacementIndex, Set = i => SpiralSettings.NebulaPlacementIndex = i,
-        },
-    };
+    private static readonly UiRow[] Rows = UiRows.All;
 
     private static StartNewGameDialog? _dialog;
     private static MethodInfo? _addLabelledControl;
     private static FieldInfo? _labelWidthField;
     private static FieldInfo? _startSettingsField;
+    private static FieldInfo? _rowCounterField;
     private static FieldInfo? _previewPositionField;
     private static FieldInfo? _previewSizeField;
-    // The game draws the galaxy preview right under the last vanilla row, which is where our rows go. While Spiral is
-    // selected it is moved to the free space right of them.
+    // The game draws the galaxy preview right under the last vanilla row, which is where our rows go. While a shape with
+    // extra rows is selected it is moved to the free space right of them.
     private static Vector2 _vanillaPreviewPosition;
-    private static Vector2 _spiralPreviewPosition;
+    private static Vector2 _shapedPreviewPosition;
     private static bool _previewPositionsKnown;
 
     public static void Install(Harmony harmony)
@@ -98,11 +44,13 @@ internal static class SpiralUi
             });
             _labelWidthField = AccessTools.Field(dialogType, "LabelWidth");
             _startSettingsField = AccessTools.Field(dialogType, "_GameStartSettings");
+            _rowCounterField = AccessTools.Field(dialogType, "_RowCounter");
             _previewPositionField = AccessTools.Field(dialogType, "GalaxyPreviewTexturePosition");
             _previewSizeField = AccessTools.Field(dialogType, "GalaxyPreviewTextureSize");
-            if (_addLabelledControl == null || _labelWidthField == null || _startSettingsField == null || _previewPositionField == null || _previewSizeField == null)
+            if (_addLabelledControl == null || _labelWidthField == null || _startSettingsField == null || _rowCounterField == null
+                || _previewPositionField == null || _previewSizeField == null)
             {
-                Bootstrap.Log("UI: dialog internals not found, in-game Spiral options disabled.");
+                Bootstrap.Log("UI: dialog internals not found, in-game shape options disabled.");
                 return;
             }
 
@@ -147,7 +95,8 @@ internal static class SpiralUi
             // Slightly shorter than the game's 60px-scaled rows so all rows fit under the existing ones.
             float buttonHeight = UserInterfaceHelper.CalculateScaledValue(35f);
             float lineHeight = UserInterfaceHelper.CalculateScaledValue(25f);
-            float gap = __instance.HalfLineHeight * 1.5f;
+            // Tighter than the game's own row spacing (HalfLineHeight * 1.5): the biggest stacks have eight rows.
+            float gap = UserInterfaceHelper.CalculateScaledValue(10f);
             float labelWidth = (float)_labelWidthField!.GetValue(__instance)!;
 
             // The existing rows are stacked back to back; continue below the last one.
@@ -156,43 +105,52 @@ internal static class SpiralUi
             {
                 bottom = Math.Max(bottom, c.Position.Y + c.Size.Y);
             }
-            float y = bottom + gap * 0.5f;
+            float firstY = bottom + gap * 0.5f;
+            object stripeStart = _rowCounterField!.GetValue(__instance)!;
 
-            foreach (Row row in Rows)
+            // One stack of rows per group, all starting at the same place (only one group is visible at a time).
+            foreach (IGrouping<string, UiRow> group in Rows.GroupBy(r => r.Group))
             {
-                row.Controls.Clear();
-
-                int count = row.Options.Length;
-                var group = new ToggleButtonGroup { Name = NamePrefix + row.Key };
-                group.Initialize((FontSize)1, (FontSize)2, null!);
-                group.ClickEvent = OnChoice;
-                group.Visible = true;
-                group.SetSizeAndPosition(new Vector2(RowWidth(count, buttonWidth, buttonGap), buttonHeight), Vector2.Zero);
-                for (int i = 0; i < count; i++)
+                _rowCounterField.SetValue(__instance, stripeStart);
+                float y = firstY;
+                foreach (UiRow row in group)
                 {
-                    group.AddButton($"{NamePrefix}{row.Key} {row.Options[i].Label}", row.Options[i].Label, (Texture)null!);
-                }
+                    row.Controls.Clear();
 
-                int before = panel.Controls.Count;
-                object[] args = { galaxy, empire, panel, row.Label, row.Hint, group, labelWidth, lineHeight, gap, 0f, y };
-                _addLabelledControl!.Invoke(__instance, args);
-                y = (float)args[10];
+                    int count = row.Options.Length;
+                    var buttons = new ToggleButtonGroup { Name = NamePrefix + row.Key };
+                    buttons.Initialize((FontSize)1, (FontSize)2, null!);
+                    buttons.ClickEvent = OnChoice;
+                    buttons.Visible = true;
+                    buttons.SetSizeAndPosition(new Vector2(RowWidth(count, buttonWidth, buttonGap), buttonHeight), Vector2.Zero);
+                    for (int i = 0; i < count; i++)
+                    {
+                        buttons.AddButton($"{NamePrefix}{row.Key} {row.Options[i].Label}", row.Options[i].Label, (Texture)null!);
+                    }
 
-                for (int i = before; i < panel.Controls.Count; i++)
-                {
-                    row.Controls.Add(panel.Controls[i]);
+                    int before = panel.Controls.Count;
+                    object[] args = { galaxy, empire, panel, row.Label, row.Hint, buttons, labelWidth, lineHeight, gap, 0f, y };
+                    _addLabelledControl!.Invoke(__instance, args);
+                    y = (float)args[10];
+
+                    for (int i = before; i < panel.Controls.Count; i++)
+                    {
+                        row.Controls.Add(panel.Controls[i]);
+                    }
+                    row.Buttons = buttons;
+                    buttons.ToggleButton(Math.Clamp(row.Get(), 0, count - 1));
                 }
-                group.ToggleButton(Math.Clamp(row.Get(), 0, count - 1));
             }
+            _rowCounterField.SetValue(__instance, stripeStart);
 
             // Move the preview to the right of the rows: left edge past the widest row, right edge at the panel border.
             var previewSize = (Vector2)_previewSizeField!.GetValue(__instance)!;
             _vanillaPreviewPosition = (Vector2)_previewPositionField!.GetValue(__instance)!;
             float widestRow = labelWidth + gap + Rows.Max(r => RowWidth(r.Options.Length, buttonWidth, buttonGap));
-            _spiralPreviewPosition = new Vector2(Math.Max(panel.Size.X - previewSize.X - gap, widestRow + gap), bottom + gap * 0.5f);
+            _shapedPreviewPosition = new Vector2(Math.Max(panel.Size.X - previewSize.X - gap, widestRow + gap), firstY);
             _previewPositionsKnown = true;
 
-            Bootstrap.Log($"UI: added {Rows.Length} rows below y={bottom:F0}, ending at y={y:F0}.");
+            Bootstrap.Log($"UI: added {Rows.Length} rows below y={bottom:F0}.");
             ApplyVisibility(__instance);
         }
         catch (Exception ex)
@@ -224,17 +182,29 @@ internal static class SpiralUi
         {
             var settings = _startSettingsField?.GetValue(dialog) as GameStartSettings;
             // Before the first bind there are no settings yet: keep the rows hidden.
-            bool show = settings?.Shape == GalaxyShape.Spiral;
-            if (_previewPositionsKnown)
+            bool anyRows = false;
+            foreach (UiRow row in Rows)
             {
-                _previewPositionField!.SetValue(dialog, show ? _spiralPreviewPosition : _vanillaPreviewPosition);
-            }
-            foreach (Row row in Rows)
-            {
+                bool show = settings != null && Array.IndexOf(row.Shapes, settings.Shape) >= 0;
+                anyRows |= show;
                 foreach (DWControl c in row.Controls)
                 {
                     c.Visible = show;
                 }
+
+                // The same setting can appear in several stacks (the ring shapes), so bring the shown buttons up to date.
+                if (show && row.Buttons != null)
+                {
+                    int wanted = Math.Clamp(row.Get(), 0, row.Options.Length - 1);
+                    if (row.Buttons.ToggledButtonIndex != wanted)
+                    {
+                        row.Buttons.ToggleButton(wanted);
+                    }
+                }
+            }
+            if (_previewPositionsKnown)
+            {
+                _previewPositionField!.SetValue(dialog, anyRows ? _shapedPreviewPosition : _vanillaPreviewPosition);
             }
         }
         catch (Exception ex)
@@ -251,7 +221,7 @@ internal static class SpiralUi
         {
             if (sender is ToggleButtonGroup group && group.Name != null && group.Name.StartsWith(NamePrefix, StringComparison.Ordinal))
             {
-                Row? row = Array.Find(Rows, r => NamePrefix + r.Key == group.Name);
+                UiRow? row = Array.Find(Rows, r => NamePrefix + r.Key == group.Name);
                 if (row != null && group.ToggledButtonIndex >= 0)
                 {
                     row.Set(group.ToggledButtonIndex);

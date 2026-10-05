@@ -1,5 +1,6 @@
 using System.Reflection;
 using DistantWorlds.Types;
+using Stride.Core.Mathematics;
 using HarmonyLib;
 
 namespace SpiralArms;
@@ -54,6 +55,16 @@ public static class Bootstrap
             {
                 harmony.Patch(cloudTarget, prefix: new HarmonyMethod(typeof(Bootstrap).GetMethod(nameof(CloudPrefix), BindingFlags.Static | BindingFlags.NonPublic)));
             }
+            // Classic, rings, Irregular and clusters: every vanilla placement helper is redirected to Placement.Sample.
+            foreach (string helper in new[] { "DeterminePointRing", "DeterminePointCenter", "DeterminePointRandomCircular", "DeterminePointCluster" })
+            {
+                PatchIfFound(harmony, helper, prefix: nameof(HelperPrefix));
+            }
+            PatchIfFound(harmony, "GenerateStarClusters", postfix: nameof(ClustersPostfix));
+            // Nebulae placed with the rings and the center blob follow the rings' ellipse and offset.
+            PatchIfFound(harmony, "DetermineCloudSettingsRing", postfix: nameof(CloudRingCenterPostfix));
+            PatchIfFound(harmony, "DetermineCloudSettingsCenter", postfix: nameof(CloudRingCenterPostfix));
+
             Log($"PATCH OK. arms={SpiralSettings.ArmCount} pitch={SpiralSettings.PitchRad:F3}rad spread={SpiralSettings.SpreadRad:F3}rad core={SpiralSettings.CoreRadius} coreShare={SpiralSettings.CoreShare} fieldShare={SpiralSettings.FieldShare} thinning={SpiralSettings.EdgeThinning} taper={SpiralSettings.ArmTaperValue}");
 
             SpiralUi.Install(harmony);
@@ -64,12 +75,96 @@ public static class Bootstrap
         }
     }
 
+    private static void PatchIfFound(Harmony harmony, string method, string? prefix = null, string? postfix = null)
+    {
+        MethodInfo? target = AccessTools.Method(typeof(Galaxy), method);
+        if (target == null)
+        {
+            Log($"WARN: Galaxy.{method} not found.");
+            return;
+        }
+        HarmonyMethod? pre = prefix == null ? null : new HarmonyMethod(typeof(Bootstrap).GetMethod(prefix, BindingFlags.Static | BindingFlags.NonPublic));
+        HarmonyMethod? post = postfix == null ? null : new HarmonyMethod(typeof(Bootstrap).GetMethod(postfix, BindingFlags.Static | BindingFlags.NonPublic));
+        harmony.Patch(target, prefix: pre, postfix: post);
+    }
+
+    // Shared by DeterminePointRing / Center / RandomCircular / Cluster: they all take (rnd, settings, ..., out x, out y).
+    // Shapes not handled by Placement (Spiral, Elliptical, and anything unknown) run the original.
+    private static bool HelperPrefix(Galaxy __instance, Random rnd, GameStartSettings settings, out float x, out float y)
+    {
+        x = 0f;
+        y = 0f;
+        if (!Placement.Handles(settings.Shape))
+        {
+            return true;
+        }
+
+        try
+        {
+            Placement.Sample(__instance, settings, rnd, out x, out y);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log("Placement.Sample error, falling back to vanilla: " + ex.Message);
+            return true;
+        }
+    }
+
+    private static void ClustersPostfix(Galaxy __instance, GameStartSettings settings, List<Point> starClusterLocations, List<float> starClusterPortions)
+    {
+        try
+        {
+            Placement.AdjustClusters(__instance, settings, starClusterLocations, starClusterPortions);
+        }
+        catch (Exception ex)
+        {
+            Log("AdjustClusters error: " + ex.Message);
+        }
+    }
+
+    private static void CloudRingCenterPostfix(GameStartSettings settings, ref float x, ref float y)
+    {
+        if (!Placement.IsRingShape(settings.Shape))
+        {
+            return;
+        }
+        try
+        {
+            float radius = settings.Dimensions * 0.5f;
+            float vx = x - radius;
+            float vy = y - radius;
+            Placement.OuterEllipse(settings, ref vx, ref vy);
+            x = radius + vx;
+            y = radius + vy;
+        }
+        catch (Exception ex)
+        {
+            Log("CloudRingCenterPostfix error: " + ex.Message);
+        }
+    }
+
     // Parameter names must match the original's so Harmony can bind them by name.
     // Returning false skips the original; returning true leaves other shapes alone.
     private static bool PlacePrefix(Random rnd, GameStartSettings settings, float centerRadius, out float x, out float y)
     {
         x = 0f;
         y = 0f;
+        if (settings.Shape == GalaxyShape.Elliptical)
+        {
+            // Elliptical shares this helper with Spiral in vanilla; place it with elongation / concentration / bar.
+            try
+            {
+                Placement.SampleElliptical(settings, rnd, centerRadius, out x, out y);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Log("SampleElliptical error, falling back to vanilla: " + ex.Message);
+                return true;
+            }
+        }
+
         if (settings.Shape != GalaxyShape.Spiral)
         {
             return true;
@@ -130,6 +225,11 @@ public static class Bootstrap
         radius = 1f;
         name = string.Empty;
         permeability = 1f;
+        if (settings.Shape == GalaxyShape.Classic)
+        {
+            return ClassicCloud(__instance, rnd, settings, cloudSizeMinimum, cloudSizeMaximum, permeabilityMinimum, permeabilityMaximum, out x, out y, out radius, out permeability);
+        }
+
         if (settings.Shape != GalaxyShape.Spiral)
         {
             return true;
@@ -165,6 +265,54 @@ public static class Bootstrap
         catch (Exception ex)
         {
             Log("CloudPrefix error, falling back to vanilla: " + ex.Message);
+            return true;
+        }
+    }
+
+    // Classic shares the nebula arm method with Spiral. Vanilla walks two fixed arms (a logarithmic spiral from 0.05R out to R,
+    // pitch about 12 degrees, cloud size growing with the square root of the walk progress); this keeps that shape but
+    // takes the number of arms and the winding from the Classic settings. Vanilla makes two sets of calls whose armRotation
+    // differs by pi (one per arm); using that value as the phase would give two sets of N arms (6 arms for N = 3), so the
+    // phase comes from the galaxy seed instead and is the same for every call.
+    private static bool ClassicCloud(Galaxy galaxy, Random rnd, GameStartSettings settings, float cloudSizeMinimum, float cloudSizeMaximum,
+        float permeabilityMinimum, float permeabilityMaximum, out float x, out float y, out float radius, out float permeability)
+    {
+        x = 0f;
+        y = 0f;
+        radius = 1f;
+        permeability = 1f;
+        try
+        {
+            const float Range = 2.96f; // ln(R / r_min): vanilla's 4 * 2.2 coils * ln(1.4)
+            float galaxyRadius = settings.Dimensions * 0.5f;
+            int arms = (int)ShapeSettings.V(ShapeSettings.ClassicNebulaArms, ShapeSettings.ClassicNebulaArmsIndex);
+            float phase = ArmPhase(settings.RandomSeed);
+            float pitch = ShapeSettings.V(ShapeSettings.ClassicNebulaWinding, ShapeSettings.ClassicNebulaWindingIndex) * MathF.PI / 180f;
+
+            for (int attempt = 0; attempt < 100; attempt++)
+            {
+                float progress = 0.01f + 0.99f * MathF.Sqrt(1f - (float)rnd.NextDouble());
+                float logRadius = Range * (progress - 1f);
+                float r = galaxyRadius * MathF.Exp(logRadius);
+                int arm = rnd.Next(arms);
+                float theta = phase + arm * TwoPi / arms + WindSign * logRadius / MathF.Tan(pitch) + Gaussian(rnd) * 0.03f;
+
+                x = galaxyRadius + r * MathF.Cos(theta);
+                y = galaxyRadius + r * MathF.Sin(theta);
+                radius = (cloudSizeMinimum + (float)rnd.NextDouble() * (cloudSizeMaximum - cloudSizeMinimum)) * MathF.Sqrt(progress);
+
+                if (!galaxy.NebulaClouds.CheckAnyWithinRange((int)x, (int)y, radius, 0.4f))
+                {
+                    break;
+                }
+            }
+
+            permeability = permeabilityMinimum + (float)rnd.NextDouble() * (permeabilityMaximum - permeabilityMinimum);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log("ClassicCloud error, falling back to vanilla: " + ex.Message);
             return true;
         }
     }

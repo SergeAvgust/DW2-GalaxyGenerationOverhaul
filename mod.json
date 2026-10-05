@@ -6,7 +6,7 @@
     }
   },
   "displayName": "Spiral Arms",
-  "description": "Spiral galaxies get real spiral arms (4-6 by default), a dense central bulge, and stars thinning out toward the rim. Only the Spiral shape is affected; other shapes are untouched.",
-  "version": "0.1.0",
+  "description": "Adds options to the galaxy settings screen of the new-game dialog: real spiral arms for Spiral galaxies, and shape controls for Elliptical, Classic, Ring, Cluster and Irregular galaxies. Defaults reproduce the standard galaxies.",
+  "version": "0.2.0",
   "bundles": []
 }
