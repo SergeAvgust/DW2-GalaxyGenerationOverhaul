@@ -168,7 +168,11 @@ internal static class Regions
             }
         }
         int k = capitals.Count;
-        Plan? plan = Build(galaxy, k, RegionPlacement.MinDensity);
+        Plan? plan = RegionPlacement.LastPlan ?? Build(galaxy, k, RegionPlacement.MinDensity);
+        if (plan != null && plan.K != k)
+        {
+            plan = Build(galaxy, k, RegionPlacement.MinDensity);
+        }
         if (plan == null)
         {
             Bootstrap.Log($"Regions: nothing to do ({galaxy.Systems.Count} stars, {k} empires).");

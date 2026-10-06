@@ -190,9 +190,24 @@ internal static class SpiralUi
                 bottom = Math.Max(bottom, c.Position.Y + c.Size.Y);
             }
             float y = bottom + gap * 0.5f;
+            float startY = y;
             foreach (UiRow row in rows)
             {
                 BuildRow(dialog, galaxy, empire, panel, row, labelWidth, lineHeight, gap, buttonWidth, buttonGap, buttonHeight, ref y);
+            }
+            // The starting-location picture is drawn right below the last vanilla row, where the new rows now are: push it down.
+            // The refugee-fleet picture goes to the same place as the ordinary one.
+            if (section == 6)
+            {
+                FieldInfo? ordinary = AccessTools.Field(dialog.GetType(), "StartingLocationTexturePosition");
+                FieldInfo? refugee = AccessTools.Field(dialog.GetType(), "StartingLocationTexturePositionRefugeeFleet");
+                if (ordinary?.GetValue(dialog) is Vector2 position && position != Vector2.Zero)
+                {
+                    var moved = new Vector2(position.X, position.Y + (y - startY));
+                    ordinary.SetValue(dialog, moved);
+                    refugee?.SetValue(dialog, moved);
+                    Bootstrap.Log($"UI: starting-location picture moved from y {position.Y:F0} to {moved.Y:F0} (refugee fleet: same place).");
+                }
             }
             Bootstrap.Log($"UI: added {rows.Length} row(s) to section {section} below y={bottom:F0} (panel height {panel.Size.Y:F0}).");
         }

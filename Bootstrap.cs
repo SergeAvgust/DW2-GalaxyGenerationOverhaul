@@ -72,7 +72,7 @@ public static class Bootstrap
             HomeSites.Install(harmony);
             Regions.Install(harmony);
             RegionPlacement.Install(harmony);
-            PlacementStep.Install(harmony);
+            SizeLimits.Install(harmony);
             SpiralUi.Install(harmony);
         }
         catch (Exception ex)

@@ -252,41 +252,14 @@ internal static class UiRows
                 + "richer populations; lower quality leaves most of them marginal.",
             Get = () => Habitability.QualityIndex, Set = i => Habitability.QualityIndex = i,
         },
-    };
-
-    // The "Alien Empire Placement" screen (section 12, added by PlacementStep).
-    public static readonly UiRow[] AlienPlacement =
-    {
         new()
         {
-            Group = "AlienPlacement", Key = "PlacementMethod", Label = "Placement", Options = RegionPlacement.Methods, Shapes = Array.Empty<GalaxyShape>(),
+            Group = "Colonization", Key = "PlacementMethod", Label = "Empire Placement", Options = RegionPlacement.Methods, Shapes = Array.Empty<GalaxyShape>(),
             Hint = "How the empires are placed. Standard is the game's own search: a random point, then the nearest suitable planet, which can leave "
                 + "big areas empty and put an empire on a lonely star. Balanced regions splits the populated part of the galaxy into one region per "
                 + "empire, each holding about the same number of stars, and places every empire in its own region. Your own start location setting "
                 + "(deep core, core, rim or a spot on the map) picks which region is yours.",
             Get = () => RegionPlacement.MethodIndex, Set = i => RegionPlacement.MethodIndex = i,
-        },
-        new()
-        {
-            Group = "AlienPlacement", Key = "RegionStars", Label = "Region Stars", Options = RegionPlacement.StarClasses, Shapes = Array.Empty<GalaxyShape>(),
-            Hint = "Which stars may be part of a region and hold a capital, by how crowded their surroundings are (within the Neighbour Range). "
-                + "Dense only keeps to the thick parts of the galaxy; All but voids also lets thin areas hold empires. Voids and stragglers are never used. "
-                + "Only used by Balanced regions.",
-            Get = () => RegionPlacement.StarClassIndex, Set = i => RegionPlacement.StarClassIndex = i,
-        },
-        new()
-        {
-            Group = "AlienPlacement", Key = "HomeNeighbours", Label = "Home Neighbours", Options = HomeSites.Counts, Shapes = Array.Empty<GalaxyShape>(),
-            Hint = "Minimum number of other stars near every empire's capital, so nobody starts on a lonely straggler. Off is the standard placement. "
-                + "Sites with fewer neighbours are rejected and the game picks another spot. The distance is set by Neighbour Range.",
-            Get = () => HomeSites.CountIndex, Set = i => HomeSites.CountIndex = i,
-        },
-        new()
-        {
-            Group = "AlienPlacement", Key = "HomeRange", Label = "Neighbour Range", Options = HomeSites.Ranges, Shapes = Array.Empty<GalaxyShape>(),
-            Hint = "How close, in millions of distance units, a star must be to count as a neighbour of a capital. Only used when Home Neighbours is on. "
-                + "For scale: in a 1000-star galaxy the typical star has about 15 others within 100M and 45 within 200M.",
-            Get = () => HomeSites.RangeIndex, Set = i => HomeSites.RangeIndex = i,
         },
     };
 
@@ -296,20 +269,19 @@ internal static class UiRows
         new()
         {
             Group = "StartingSituation", Key = "GalaxyKnowledge", Label = "Galaxy Knowledge", Options = Exploration.Modes, Shapes = Array.Empty<GalaxyShape>(),
-            Hint = "How much of the galaxy your empire knows at the start. Standard is the usual handful of nearby systems. Fully explored "
-                + "marks every system, planet, moon and asteroid as explored and surveyed to the maximum, so all resources, bonuses and facilities "
+            Hint = "How much of the galaxy your empire knows at the start. Standard is the usual handful of nearby systems. Everything explored "
+                + "marks every system as explored. Everything surveyed also surveys every planet, moon and asteroid to the maximum, so all resources, bonuses and facilities "
                 + "are known without sending survey ships (ruins still have to be investigated).",
             Get = () => Exploration.ModeIndex, Set = i => Exploration.ModeIndex = i,
         },
     };
 
     // Rows added to a section of the new-game dialog for every galaxy shape, keyed by the dialog's section index:
-    // 3 = colonization, 6 = your starting situation, 12 = alien empire placement (a screen added by PlacementStep).
+    // 3 = colonization, 6 = your starting situation.
     public static readonly Dictionary<int, UiRow[]> CommonBySection = new()
     {
         [3] = Colonization,
         [6] = StartingSituation,
-        [PlacementStep.SectionIndex] = AlienPlacement,
     };
 
     public static readonly UiRow[] All = BaseRows

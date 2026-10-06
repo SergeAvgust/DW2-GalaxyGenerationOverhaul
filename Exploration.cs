@@ -19,7 +19,7 @@ namespace SpiralArms;
 // It runs once per generated game, right before Generate's final UpdateAllVisibilityMapKnownData, when all empires exist.
 internal static class Exploration
 {
-    public static readonly Option[] Modes = { new("Standard", 0), new("Fully explored", 1) };
+    public static readonly Option[] Modes = { new("Standard", 0), new("Explored", 1), new("Surveyed", 2) };
     public static int ModeIndex;
 
     private static bool _pending;
@@ -43,7 +43,7 @@ internal static class Exploration
     private static void GeneratePrefix(GameStartSettings settings, bool previewMode, bool isBackgroundGalaxy)
     {
         // The dialog's preview galaxy and the main-menu background have no player.
-        _pending = ModeIndex == 1 && !previewMode && !isBackgroundGalaxy && settings.StarCount > 0;
+        _pending = ModeIndex > 0 && !previewMode && !isBackgroundGalaxy && settings.StarCount > 0;
     }
 
     private static Exception? GenerateFinalizer(Exception? __exception)
@@ -86,7 +86,8 @@ internal static class Exploration
             return;
         }
 
-        const byte level = byte.MaxValue;
+        // Explored: the depth the game gives to the systems around a capital; Surveyed: the maximum.
+        byte level = ModeIndex == 2 ? byte.MaxValue : (byte)2;
         int unknownBefore = CountSystemsWithUnknownItems(galaxy, player);
 
         int count = 0;

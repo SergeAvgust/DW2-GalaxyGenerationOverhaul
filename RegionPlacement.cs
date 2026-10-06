@@ -26,6 +26,10 @@ internal static class RegionPlacement
     public static readonly Option[] StarClasses = { new("Dense only", 3), new("Dense + moderate", 2), new("All but voids", 1) };
     public static int StarClassIndex = 1;
 
+    // The plan the capitals were placed with; the map in Regions draws this one (rebuilding it later gives different regions, since
+    // the galaxy has gained systems by then).
+    public static Regions.Plan? LastPlan;
+
     public static int MinDensity => (int)StarClasses[StarClassIndex].Value;
 
     private static bool _game;
@@ -116,6 +120,7 @@ internal static class RegionPlacement
     // Parameter names must match the original's so Harmony can bind them by name.
     private static void GeneratePrefix(GameStartSettings settings, bool previewMode, bool isBackgroundGalaxy)
     {
+        LastPlan = null;
         _game = MethodIndex == 1 && !previewMode && !isBackgroundGalaxy && settings.StarCount > 0;
         _planTried = false;
         _plan = null;
@@ -241,6 +246,7 @@ internal static class RegionPlacement
         int k = empires.Count;
         Bootstrap.Log($"RegionPlacement: {empires.Count} empires to place (settings list: {settings.Empires.Count}).");
         _plan = Regions.Build(galaxy, k, MinDensity);
+        LastPlan = _plan;
         if (_plan == null)
         {
             Bootstrap.Log($"RegionPlacement: no plan ({galaxy.Systems.Count} stars, {k} empires); vanilla placement.");
@@ -430,8 +436,7 @@ internal static class RegionPlacement
         Dictionary<int, int> hops = HopsFromSite(plan, region);
         Regions.Star middle = plan.Sites[region]!;
         List<StarSystem> ordered = plan.Members[region]
-            .OrderBy(m => hops.TryGetValue(m.Id, out int h) ? h : int.MaxValue)
-            .ThenBy(m => (m.X - middle.X) * (m.X - middle.X) + (m.Y - middle.Y) * (m.Y - middle.Y))
+            .OrderBy(m => (m.X - middle.X) * (m.X - middle.X) + (m.Y - middle.Y) * (m.Y - middle.Y))
             .Select(m => galaxy.Systems.TryGetValue(m.Id, out StarSystem? sys) ? sys : null)
             .Where(sys => sys != null && sys.ColonyCount == 0)
             .Select(sys => sys!)
@@ -446,7 +451,12 @@ internal static class RegionPlacement
             {
                 if (HasPlanetOfTypes(system, natives))
                 {
-                    Bootstrap.Log($"RegionPlacement: region {region}: system {system.SystemId} is the closest one to the region site with a native planet ({hops.GetValueOrDefault(system.SystemId, -1)} jumps from the site).");
+                    // Too far from the site to be a good start: make a planet at the site instead.
+                    if (DistanceToSite(system, middle) > TightRadiusShare * plan.Range * 1e6f)
+                    {
+                        break;
+                    }
+                    Bootstrap.Log($"RegionPlacement: region {region}: system {system.SystemId} is the closest one to the region site with a native planet ({DistanceToSite(system, middle) / 1e6f:0}M away, {hops.GetValueOrDefault(system.SystemId, -1)} jumps from the site).");
                     return system;
                 }
             }
@@ -464,6 +474,15 @@ internal static class RegionPlacement
     }
 
     // What the game accepts as a home planet for the race: its single best colonization type, or the best three when it has no preference.
+    // A native planet further than this share of the neighbour range from the region site is not used; one is made at the site.
+    private const float TightRadiusShare = 0.4f;
+
+    private static float DistanceToSite(StarSystem system, Regions.Star site)
+    {
+        float dx = system.GalaxyX - site.X * 1e6f, dy = system.GalaxyY - site.Y * 1e6f;
+        return (float)Math.Sqrt(dx * dx + dy * dy);
+    }
+
     private static List<byte> NativeTypes(Galaxy galaxy, Empire empire, Race race)
     {
         var result = new List<byte>();
@@ -548,7 +567,9 @@ internal static class RegionPlacement
             best.TypeId = typeId;
             best.Diameter = (int)(target.DiameterMinimum + _rnd.NextDouble() * (target.DiameterMaximum - target.DiameterMinimum));
             // The game only offers a planet as a home when its quality suits the race, and the old type's quality is usually far too low.
-            best.QualityRaw = target.GenerateQualityRaw(_rnd, Habitability.Quality[Habitability.QualityIndex].Value);
+            // Halfway between the median and the maximum of the type's range, so the planet passes the game's minimum-suitability test for a home planet.
+            best.QualityRaw = 0.5f * (target.QualityRangeMedian + target.QualityRangeMaximum);
+            Bootstrap.Log($"RegionPlacement: planet {best.OrbId} quality set to {best.QualityRaw:0.00}.");
             Bootstrap.Log($"RegionPlacement: planet {best.OrbId} in system {system.SystemId} changed from type {oldType} to {typeId} ({target.Name}).");
             return true;
         }
