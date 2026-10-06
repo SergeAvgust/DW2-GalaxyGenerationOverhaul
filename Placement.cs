@@ -1,4 +1,4 @@
-using DistantWorlds.Types;
+﻿using DistantWorlds.Types;
 using Stride.Core.Mathematics;
 
 namespace SpiralArms;
@@ -691,3 +691,4 @@ internal static class Placement
         y = Math.Clamp(y, edge, max);
     }
 }
+

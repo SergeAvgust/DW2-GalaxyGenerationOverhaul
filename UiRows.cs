@@ -252,6 +252,20 @@ internal static class UiRows
                 + "richer populations; lower quality leaves most of them marginal.",
             Get = () => Habitability.QualityIndex, Set = i => Habitability.QualityIndex = i,
         },
+        new()
+        {
+            Group = "Colonization", Key = "HomeNeighbours", Label = "Home Neighbours", Options = HomeSites.Counts, Shapes = Array.Empty<GalaxyShape>(),
+            Hint = "Minimum number of other stars near every empire's capital, so nobody starts on a lonely straggler. Off is the standard placement. "
+                + "Sites with fewer neighbours are rejected and the game picks another spot. The distance is set by Neighbour Range.",
+            Get = () => HomeSites.CountIndex, Set = i => HomeSites.CountIndex = i,
+        },
+        new()
+        {
+            Group = "Colonization", Key = "HomeRange", Label = "Neighbour Range", Options = HomeSites.Ranges, Shapes = Array.Empty<GalaxyShape>(),
+            Hint = "How close, in millions of distance units, a star must be to count as a neighbour of a capital. Only used when Home Neighbours is on. "
+                + "For scale: in a 1000-star galaxy the typical star has about 15 others within 100M and 45 within 200M.",
+            Get = () => HomeSites.RangeIndex, Set = i => HomeSites.RangeIndex = i,
+        },
     };
 
     // The starting-situation step (home system, expansion, tech level, ...): rows about the player's empire.

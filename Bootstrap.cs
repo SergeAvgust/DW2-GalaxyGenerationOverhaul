@@ -69,6 +69,8 @@ public static class Bootstrap
 
             Habitability.Install(harmony);
             Exploration.Install(harmony);
+            HomeSites.Install(harmony);
+            Regions.Install(harmony);
             SpiralUi.Install(harmony);
         }
         catch (Exception ex)
