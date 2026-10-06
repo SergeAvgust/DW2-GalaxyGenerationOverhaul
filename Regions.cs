@@ -6,8 +6,8 @@ using HarmonyLib;
 
 namespace SpiralArms;
 
-// Diagnostic first step of the empire-placement overhaul: splits the galaxy into one balanced region per empire and writes a map
-// (SpiralArms_regions.svg in the temp folder) plus a log summary. It does not change where anything is placed yet.
+// Splits the galaxy into one balanced region per empire (used by RegionPlacement), and after each generated game writes a map of the
+// regions and of where the capitals ended up (SpiralArms_regions.svg in the temp folder) plus a log summary.
 //
 //   1. Density: every star gets the number of other stars within the neighbour range (HomeSites.Ranges). Relative to the galaxy's
 //      median that makes it void / sparse / moderate / dense.
@@ -17,10 +17,9 @@ namespace SpiralArms;
 //      take a star next to one it already holds, so it stays in one piece and cannot jump a void; pieces too small to hold a
 //      region are left out. Cost is measured in hops between stars, so it works for any galaxy shape.
 //   4. Site: per region, a well-connected star near the middle of its stars.
-// The map also shows where vanilla actually put the capitals, to compare with the regions.
 internal static class Regions
 {
-    private sealed class Star
+    internal sealed class Star
     {
         public int Id;
         public float X, Y;       // millions
@@ -57,29 +56,38 @@ internal static class Regions
         return __exception;
     }
 
-    private static void Analyse(Galaxy galaxy)
+    // Result of splitting the galaxy: candidate stars grouped into one region per empire, and a site per region.
+    internal sealed class Plan
     {
-        var stars = new List<Star>();
+        public List<Star> Stars = new();
+        public List<Star> Candidates = new();
+        public int K;
+        public float Range;      // millions
+        public float Median;
+        public int Dropped;
+        public int[] ByDensity = new int[4];
+        public int[] Sizes = Array.Empty<int>();
+        public List<Star>[] Members = Array.Empty<List<Star>>();
+        public Star?[] Sites = Array.Empty<Star?>();
+        public float[] Cx = Array.Empty<float>(), Cy = Array.Empty<float>();   // site positions, millions
+        public readonly Dictionary<int, int> RegionOfSystem = new();
+    }
+
+    // minDensity: 3 = dense stars only, 2 = dense and moderate, 1 = everything but voids.
+    internal static Plan? Build(Galaxy galaxy, int k, int minDensity)
+    {
+        var plan = new Plan { K = k };
         foreach (KeyValuePair<int, StarSystem> entry in galaxy.Systems)
         {
             if (entry.Value != null)
             {
-                stars.Add(new Star { Id = entry.Value.SystemId, X = entry.Value.GalaxyX / 1e6f, Y = entry.Value.GalaxyY / 1e6f });
+                plan.Stars.Add(new Star { Id = entry.Value.SystemId, X = entry.Value.GalaxyX / 1e6f, Y = entry.Value.GalaxyY / 1e6f });
             }
         }
-        var capitals = new List<(string Name, bool Player, float X, float Y)>();
-        foreach (Empire e in galaxy.Empires)
-        {
-            if (e.Capital != null && !e.IsPirate)
-            {
-                capitals.Add((e.Name, e.IsPlayer, e.Capital.GalaxyX / 1e6f, e.Capital.GalaxyY / 1e6f));
-            }
-        }
-        int k = capitals.Count;
+        List<Star> stars = plan.Stars;
         if (stars.Count < 10 || k < 1)
         {
-            Bootstrap.Log($"Regions: nothing to do ({stars.Count} stars, {k} empires).");
-            return;
+            return null;
         }
 
         // 1. density
@@ -103,41 +111,71 @@ internal static class Regions
         foreach (Star s in stars)
         {
             s.Density = s.Neighbours < 0.25f * median ? 0 : s.Neighbours < 0.6f * median ? 1 : s.Neighbours < 1.5f * median ? 2 : 3;
+            plan.ByDensity[s.Density]++;
         }
+        plan.Range = range;
+        plan.Median = median;
 
         // 2-3. candidates and balanced regions
-        List<Star> candidates = stars.Where(s => s.Density >= 2).ToList();
+        List<Star> candidates = stars.Where(s => s.Density >= minDensity).ToList();
         if (candidates.Count < k)
         {
             candidates = stars;
         }
-        float[] cx = new float[k], cy = new float[k];
         Grow(candidates, k, range);
-        int dropped = candidates.Count(c => c.Region < 0);
+        plan.Dropped = candidates.Count(c => c.Region < 0);
         candidates = candidates.Where(c => c.Region >= 0).ToList();
+        plan.Candidates = candidates;
 
         // 4. sites
-        var sites = new Star?[k];
-        var sizes = new int[k];
-        foreach (Star s in candidates)
-        {
-            sizes[s.Region]++;
-        }
+        plan.Sites = new Star?[k];
+        plan.Sizes = new int[k];
+        plan.Members = new List<Star>[k];
+        plan.Cx = new float[k];
+        plan.Cy = new float[k];
         for (int r = 0; r < k; r++)
         {
-            var members = candidates.Where(s => s.Region == r).ToList();
+            List<Star> members = candidates.Where(s => s.Region == r).ToList();
+            plan.Members[r] = members;
+            plan.Sizes[r] = members.Count;
+            foreach (Star m in members)
+            {
+                plan.RegionOfSystem[m.Id] = r;
+            }
             if (members.Count == 0)
             {
                 continue;
             }
             int med = members.Select(s => s.Neighbours).OrderBy(v => v).ToArray()[members.Count / 2];
             // medoid among the well-connected stars: the one closest to all the others, so it lies inside the region
-            sites[r] = members.Where(s => s.Neighbours >= med).OrderBy(s => members.Sum(m => Math.Sqrt(Dist2(s.X, s.Y, m.X, m.Y)))).First();
-            cx[r] = sites[r]!.X;
-            cy[r] = sites[r]!.Y;
+            Star site = members.Where(s => s.Neighbours >= med).OrderBy(s => members.Sum(m => Math.Sqrt(Dist2(s.X, s.Y, m.X, m.Y)))).First();
+            plan.Sites[r] = site;
+            plan.Cx[r] = site.X;
+            plan.Cy[r] = site.Y;
         }
+        return plan;
+    }
 
-        // where vanilla put the capitals: region of the nearest candidate star
+    private static void Analyse(Galaxy galaxy)
+    {
+        var capitals = new List<(string Name, bool Player, float X, float Y)>();
+        foreach (Empire e in galaxy.Empires)
+        {
+            if (e.Capital != null && !e.IsPirate)
+            {
+                capitals.Add((e.Name, e.IsPlayer, e.Capital.GalaxyX / 1e6f, e.Capital.GalaxyY / 1e6f));
+            }
+        }
+        int k = capitals.Count;
+        Plan? plan = Build(galaxy, k, RegionPlacement.MinDensity);
+        if (plan == null)
+        {
+            Bootstrap.Log($"Regions: nothing to do ({galaxy.Systems.Count} stars, {k} empires).");
+            return;
+        }
+        List<Star> candidates = plan.Candidates;
+
+        // where the capitals ended up: region of the nearest candidate star
         var perRegion = new int[k];
         var capitalRegion = new int[k];
         for (int i = 0; i < k; i++)
@@ -147,21 +185,16 @@ internal static class Regions
             perRegion[nearest.Region]++;
         }
 
-        int[] byDensity = new int[4];
-        foreach (Star s in stars)
-        {
-            byDensity[s.Density]++;
-        }
-        Bootstrap.Log($"Regions: {stars.Count} stars, range {range:0}M, median {median:0} neighbours; void {byDensity[0]}, sparse {byDensity[1]}, moderate {byDensity[2]}, dense {byDensity[3]}.");
-        Bootstrap.Log($"Regions: {k} regions of {sizes.Min()}..{sizes.Max()} stars (ideal {candidates.Count / (float)k:0}), {dropped} candidate stars left out in pieces too small for a region; "
-            + $"vanilla capitals: {perRegion.Count(c => c == 0)} regions without one, {perRegion.Count(c => c > 1)} with more than one.");
+        Bootstrap.Log($"Regions: {plan.Stars.Count} stars, range {plan.Range:0}M, median {plan.Median:0} neighbours; void {plan.ByDensity[0]}, sparse {plan.ByDensity[1]}, moderate {plan.ByDensity[2]}, dense {plan.ByDensity[3]}.");
+        Bootstrap.Log($"Regions: {k} regions of {plan.Sizes.Min()}..{plan.Sizes.Max()} stars (ideal {candidates.Count / (float)k:0}), {plan.Dropped} candidate stars left out in pieces too small for a region; "
+            + $"capitals: {perRegion.Count(c => c == 0)} regions without one, {perRegion.Count(c => c > 1)} with more than one.");
         for (int i = 0; i < k; i++)
         {
             Bootstrap.Log($"Regions: capital {capitals[i].Name}{(capitals[i].Player ? " (player)" : "")} is in region {capitalRegion[i]}.");
         }
 
         string path = Path.Combine(Path.GetTempPath(), "SpiralArms_regions.svg");
-        File.WriteAllText(path, Svg(stars, candidates, cx, cy, sites, capitals, capitalRegion));
+        File.WriteAllText(path, Svg(plan.Stars, candidates, plan.Cx, plan.Cy, plan.Sites, capitals, capitalRegion));
         Bootstrap.Log("Regions: map written to " + path);
     }
 

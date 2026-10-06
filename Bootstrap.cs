@@ -71,6 +71,8 @@ public static class Bootstrap
             Exploration.Install(harmony);
             HomeSites.Install(harmony);
             Regions.Install(harmony);
+            RegionPlacement.Install(harmony);
+            PlacementStep.Install(harmony);
             SpiralUi.Install(harmony);
         }
         catch (Exception ex)

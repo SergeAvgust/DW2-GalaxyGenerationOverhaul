@@ -134,6 +134,8 @@ internal static class Habitability
         return __exception;
     }
 
+    public static bool IsHabitableType(byte orbTypeId) => HabitableTypes()[orbTypeId];
+
     private static bool[] HabitableTypes()
     {
         bool[]? table = _habitable;
