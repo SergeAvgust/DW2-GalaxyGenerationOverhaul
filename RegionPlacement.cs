@@ -196,7 +196,7 @@ internal static class RegionPlacement
             _activeRegion = region;
             _activeSite = site;
             _rejectionLogs = 0;
-            Bootstrap.Log($"RegionPlacement: {empire.Name}{(empire.IsPlayer ? " (player)" : "")} -> region {region} ({_plan.Sizes[region]} stars), search starts at system {site.SystemId} ({site.GalaxyX / 1e6f:0}M, {site.GalaxyY / 1e6f:0}M).");
+            Bootstrap.Log($"RegionPlacement: {empire.Name}{(IsPlayer(empire) ? " (player)" : "")} -> region {region} ({_plan.Sizes[region]} stars), search starts at system {site.SystemId} ({site.GalaxyX / 1e6f:0}M, {site.GalaxyY / 1e6f:0}M).");
         }
         catch (Exception ex)
         {
@@ -225,7 +225,7 @@ internal static class RegionPlacement
                 Bootstrap.Log("RegionPlacement outcome: " + ex.Message);
             }
         }
-        if (_activeRegion >= 0 && __result == null && __exception == null && !empire.IsPlayer && _activeRegion < _taken.Length)
+        if (_activeRegion >= 0 && __result == null && __exception == null && !IsPlayer(empire) && _activeRegion < _taken.Length)
         {
             Bootstrap.Log($"RegionPlacement: no capital could be placed for {empire.Name} in region {_activeRegion}; the region is free again.");
             _taken[_activeRegion] = false;
@@ -330,6 +330,9 @@ internal static class RegionPlacement
         return best;
     }
 
+    // Empire.IsPlayer is not set yet while the capital is placed; the start settings handed to GenerateEmpire say who the player is.
+    private static bool IsPlayer(Empire empire) => empire.IsPlayer || (_empireStart != null && _empireStart.IsPlayer);
+
     private static int RegionFor(GameStartSettings settings, Empire empire)
     {
         if (_assigned.TryGetValue(empire.EmpireId, out int known))
@@ -338,7 +341,7 @@ internal static class RegionPlacement
         }
         Regions.Plan plan = _plan!;
         int region;
-        if (empire.IsPlayer)
+        if (IsPlayer(empire))
         {
             region = _playerRegion;
         }
@@ -544,6 +547,8 @@ internal static class RegionPlacement
             byte oldType = best.TypeId;
             best.TypeId = typeId;
             best.Diameter = (int)(target.DiameterMinimum + _rnd.NextDouble() * (target.DiameterMaximum - target.DiameterMinimum));
+            // The game only offers a planet as a home when its quality suits the race, and the old type's quality is usually far too low.
+            best.QualityRaw = target.GenerateQualityRaw(_rnd, Habitability.Quality[Habitability.QualityIndex].Value);
             Bootstrap.Log($"RegionPlacement: planet {best.OrbId} in system {system.SystemId} changed from type {oldType} to {typeId} ({target.Name}).");
             return true;
         }

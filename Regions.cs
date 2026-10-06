@@ -12,10 +12,11 @@ namespace SpiralArms;
 //   1. Density: every star gets the number of other stars within the neighbour range (HomeSites.Ranges). Relative to the galaxy's
 //      median that makes it void / sparse / moderate / dense.
 //   2. Candidates: moderate and dense stars. Voids and stragglers are left out.
-//   3. Regions: candidates within range of each other are linked into a graph. Seeds are spread over it (in proportion to the size of
-//      each connected piece), and all regions then grow outward, the smallest region always taking the next star. A region can only
-//      take a star next to one it already holds, so it stays in one piece and cannot jump a void; pieces too small to hold a
-//      region are left out. Cost is measured in hops between stars, so it works for any galaxy shape.
+//   3. Regions: candidates closer than 0.75 * range are linked into continuous stretches (an arm with the core it springs from). Seeds
+//      are spread over them (at least one per stretch of half a region or more), and the regions grow outward along the links, the
+//      smallest first, over links that get expensive quickly with length. Regions never cross the gaps between stretches, and stop
+//      at 1.3 times the ideal size, so they follow arms and clusters instead of reaching across voids. Stretches too small for a
+//      region are left out. Works for any galaxy shape.
 //   4. Site: per region, a well-connected star near the middle of its stars.
 internal static class Regions
 {
@@ -200,43 +201,60 @@ internal static class Regions
 
     private static float Dist2(float ax, float ay, float bx, float by) => (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
 
-    // Links candidate stars within `range` of each other, spreads k seeds over the graph (in proportion to the size of each connected
-    // piece, farthest-first inside a piece) and grows the regions: the smallest region takes the cheapest star next to its own.
+    // Share of the neighbour range up to which two stars count as one continuous stretch of the galaxy. Longer links are gaps (the
+    // space between arms): regions never grow across them.
+    private const float GapShare = 0.75f;
+    // A region stops growing at this multiple of the ideal size, so one that has used up its arm does not have to cross a void.
+    private const float MaxSizeFactor = 1.3f;
+    // How many times the seeds are moved to the middle of their regions and the regions regrown.
+    private const int RelaxIterations = 3;
+
+    // Splits the candidate stars into k regions.
+    //   - Stars are linked when closer than GapShare * range. Connected stretches ("pieces", e.g. an arm with the core it springs from)
+    //     are the only places regions can live; pieces smaller than half a region get none and their stars are left out.
+    //   - Every piece with at least half a region of stars gets at least one seed, the rest in proportion to size; inside a piece the
+    //     seeds are placed farthest-first, so they end up at the tips of arms and in the middle of blobs.
+    //   - Regions then grow outward along the links, the smallest first, each taking the star next to it that is nearest to its seed
+    //     (so regions are compact blobs, and long links only matter for what counts as connected). A region stops at MaxSizeFactor times
+    //     the ideal size; stars nobody wanted are handed to the neighbouring region afterwards.
+    //   - Seeds are then moved to the middle of their regions and the growth is repeated a few times, and stars surrounded by another
+    //     region join it.
     private static void Grow(List<Star> pts, int k, float range)
     {
         int n = pts.Count;
-        float range2 = range * range;
+        float linkMax2 = GapShare * range * GapShare * range;
         var adj = new List<(int To, float Cost)>[n];
         for (int i = 0; i < n; i++)
         {
             adj[i] = new List<(int, float)>();
+            pts[i].Region = -1;
         }
         for (int i = 0; i < n; i++)
         {
             for (int j = i + 1; j < n; j++)
             {
                 float d2 = Dist2(pts[i].X, pts[i].Y, pts[j].X, pts[j].Y);
-                if (d2 <= range2)
+                if (d2 <= linkMax2)
                 {
-                    float cost = 1f + (float)Math.Sqrt(d2) / range;
+                    float ratio = (float)Math.Sqrt(d2) / range;
+                    float cost = 1f + 8f * ratio * ratio * ratio;
                     adj[i].Add((j, cost));
                     adj[j].Add((i, cost));
                 }
             }
-            pts[i].Region = -1;
         }
 
-        // connected pieces
+        // pieces
         var comp = new int[n];
         Array.Fill(comp, -1);
-        var sizesByComp = new List<int>();
+        var sizes = new List<int>();
         for (int i = 0; i < n; i++)
         {
             if (comp[i] >= 0)
             {
                 continue;
             }
-            int id = sizesByComp.Count, count = 0;
+            int id = sizes.Count, count = 0;
             var stack = new Stack<int>();
             stack.Push(i);
             comp[i] = id;
@@ -253,37 +271,46 @@ internal static class Regions
                     }
                 }
             }
-            sizesByComp.Add(count);
+            sizes.Add(count);
         }
 
-        // seeds per piece: largest remainder on size; pieces smaller than half a region get none
+        // seeds per piece
         float ideal = n / (float)k;
-        var seeds = new int[sizesByComp.Count];
-        var eligible = Enumerable.Range(0, sizesByComp.Count).Where(c => sizesByComp[c] >= 0.5f * ideal).ToList();
+        List<int> eligible = Enumerable.Range(0, sizes.Count).Where(c => sizes[c] >= 0.5f * ideal).OrderByDescending(c => sizes[c]).Take(k).ToList();
         if (eligible.Count == 0)
         {
-            eligible = new List<int> { Enumerable.Range(0, sizesByComp.Count).OrderByDescending(c => sizesByComp[c]).First() };
+            eligible.Add(Enumerable.Range(0, sizes.Count).OrderByDescending(c => sizes[c]).First());
         }
-        int eligibleStars = eligible.Sum(c => sizesByComp[c]);
-        int given = 0;
+        int eligibleStars = eligible.Sum(c => sizes[c]);
+        var seeds = new int[sizes.Count];
+        var share = new double[sizes.Count];
         foreach (int c in eligible)
         {
-            seeds[c] = (int)(k * (double)sizesByComp[c] / eligibleStars);
-            given += seeds[c];
+            share[c] = k * (double)sizes[c] / eligibleStars;
+            seeds[c] = Math.Max(1, (int)Math.Floor(share[c]));
         }
-        foreach (int c in eligible.OrderByDescending(c => k * (double)sizesByComp[c] / eligibleStars - seeds[c]).Take(k - given))
+        int total = eligible.Sum(c => seeds[c]);
+        while (total < k)
         {
+            int c = eligible.OrderByDescending(x => share[x] - seeds[x]).First();
             seeds[c]++;
+            total++;
+        }
+        while (total > k)
+        {
+            int c = eligible.Where(x => seeds[x] > 1).OrderBy(x => share[x] - seeds[x]).FirstOrDefault(-1);
+            if (c < 0)
+            {
+                break;
+            }
+            seeds[c]--;
+            total--;
         }
 
-        // farthest-first seeds inside each piece, by cost through the graph
+        // seeds inside each piece, farthest-first by link cost, starting from the best-connected star
         var seedNodes = new List<int>();
         foreach (int c in eligible)
         {
-            if (seeds[c] == 0)
-            {
-                continue;
-            }
             var members = Enumerable.Range(0, n).Where(i => comp[i] == c).ToList();
             var dist = new float[n];
             Array.Fill(dist, float.MaxValue);
@@ -296,8 +323,75 @@ internal static class Regions
             }
         }
 
-        // growth: the smallest region with a reachable star takes the cheapest one next to its own
+        // Growth is run a few times: after each run every seed moves to the star nearest the middle of its region and the regions are
+        // grown again (k-means on the link graph), which makes them compact and keeps seeds off the edges.
+        var eligibleSet = new HashSet<int>(eligible);
+        int cap = (int)Math.Ceiling(MaxSizeFactor * ideal);
+        for (int iteration = 0; ; iteration++)
+        {
+            GrowRegions(pts, adj, seedNodes, cap, comp, eligibleSet, range);
+            if (iteration >= RelaxIterations)
+            {
+                break;
+            }
+            bool moved = false;
+            for (int r = 0; r < seedNodes.Count; r++)
+            {
+                float sx = 0, sy = 0;
+                int count = 0;
+                foreach (Star s in pts)
+                {
+                    if (s.Region == r)
+                    {
+                        sx += s.X;
+                        sy += s.Y;
+                        count++;
+                    }
+                }
+                if (count == 0)
+                {
+                    continue;
+                }
+                sx /= count;
+                sy /= count;
+                int best = seedNodes[r];
+                float bestD = float.MaxValue;
+                for (int i = 0; i < n; i++)
+                {
+                    if (pts[i].Region == r)
+                    {
+                        float d = Dist2(pts[i].X, pts[i].Y, sx, sy);
+                        if (d < bestD)
+                        {
+                            bestD = d;
+                            best = i;
+                        }
+                    }
+                }
+                if (best != seedNodes[r])
+                {
+                    seedNodes[r] = best;
+                    moved = true;
+                }
+            }
+            if (!moved)
+            {
+                break;
+            }
+        }
+        Smooth(pts, adj, seedNodes);
+    }
+
+    // Grows one region per seed. The smallest region that can still grow takes the star next to it (over a link) that is nearest to
+    // its seed, so regions stay compact; stars nobody wanted join a neighbouring region afterwards.
+    private static void GrowRegions(List<Star> pts, List<(int To, float Cost)>[] adj, List<int> seedNodes, int cap, int[] comp, HashSet<int> eligibleSet, float range)
+    {
+        int n = pts.Count;
         int regions = seedNodes.Count;
+        foreach (Star s in pts)
+        {
+            s.Region = -1;
+        }
         var frontier = new PriorityQueue<int, float>[regions];
         var held = new int[regions];
         for (int r = 0; r < regions; r++)
@@ -308,30 +402,116 @@ internal static class Regions
         while (true)
         {
             int pick = -1;
+            float pickScaled = 0f;
             for (int r = 0; r < regions; r++)
             {
-                if (frontier[r].Count > 0 && (pick < 0 || held[r] < held[pick]))
+                // Soft balance: the cheapest offer wins, but a region that is already big pays more for each star.
+                if (held[r] < cap && frontier[r].TryPeek(out _, out float offer))
                 {
-                    pick = r;
+                    float scaled = (0.2f + offer) * (0.5f + held[r] * MaxSizeFactor / cap);
+                    if (pick < 0 || scaled < pickScaled)
+                    {
+                        pick = r;
+                        pickScaled = scaled;
+                    }
                 }
             }
             if (pick < 0)
             {
                 break;
             }
-            frontier[pick].TryDequeue(out int node, out float cost);
+            frontier[pick].TryDequeue(out int node, out _);
             if (pts[node].Region >= 0)
             {
                 continue;
             }
             pts[node].Region = pick;
             held[pick]++;
-            foreach (var (v, edge) in adj[node])
+            Star seed = pts[seedNodes[pick]];
+            foreach (var (v, _) in adj[node])
             {
                 if (pts[v].Region < 0)
                 {
-                    frontier[pick].Enqueue(v, cost + edge);
+                    frontier[pick].Enqueue(v, (float)Math.Sqrt(Dist2(pts[v].X, pts[v].Y, seed.X, seed.Y)) / range);
                 }
+            }
+        }
+
+        // stars left over inside the pieces (their neighbours were full): join the region next to them, the smallest if several
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (int i = 0; i < n; i++)
+            {
+                if (pts[i].Region >= 0 || !eligibleSet.Contains(comp[i]))
+                {
+                    continue;
+                }
+                int best = -1;
+                foreach (var (v, _) in adj[i])
+                {
+                    int r = pts[v].Region;
+                    if (r >= 0 && (best < 0 || held[r] < held[best]))
+                    {
+                        best = r;
+                    }
+                }
+                if (best >= 0)
+                {
+                    pts[i].Region = best;
+                    held[best]++;
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    // A star linked mostly to another region's stars joins that region (removes isolated specks and thin fingers).
+    private static void Smooth(List<Star> pts, List<(int To, float Cost)>[] adj, List<int> seedNodes)
+    {
+        var seeds = new HashSet<int>(seedNodes);
+        var counts = new Dictionary<int, int>();
+        for (int pass = 0; pass < 2; pass++)
+        {
+            var flips = new List<(int Star, int Region)>();
+            for (int i = 0; i < pts.Count; i++)
+            {
+                if (pts[i].Region < 0 || seeds.Contains(i))
+                {
+                    continue;
+                }
+                counts.Clear();
+                foreach (var (v, _) in adj[i])
+                {
+                    int r = pts[v].Region;
+                    if (r >= 0)
+                    {
+                        counts[r] = counts.GetValueOrDefault(r) + 1;
+                    }
+                }
+                int own = counts.GetValueOrDefault(pts[i].Region);
+                int bestRegion = pts[i].Region, bestCount = own;
+                foreach (KeyValuePair<int, int> c in counts)
+                {
+                    if (c.Value > bestCount + 1)
+                    {
+                        bestRegion = c.Key;
+                        bestCount = c.Value;
+                    }
+                }
+                if (bestRegion != pts[i].Region)
+                {
+                    flips.Add((i, bestRegion));
+                }
+            }
+            if (flips.Count == 0)
+            {
+                break;
+            }
+            foreach (var (star, region) in flips)
+            {
+                pts[star].Region = region;
             }
         }
     }
