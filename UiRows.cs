@@ -276,12 +276,24 @@ internal static class UiRows
         },
     };
 
+    // The same setting on the pirate empire step (own key: every row owns its controls, so the two toggles are kept in step by SpiralUi).
+    public static readonly UiRow[] PirateStartingSituation =
+    {
+        new()
+        {
+            Group = "PirateStartingSituation", Key = "GalaxyKnowledgePirate", Label = StartingSituation[0].Label, Options = Exploration.Modes, Shapes = Array.Empty<GalaxyShape>(),
+            Hint = StartingSituation[0].Hint,
+            Get = () => Exploration.ModeIndex, Set = i => Exploration.ModeIndex = i,
+        },
+    };
+
     // Rows added to a section of the new-game dialog for every galaxy shape, keyed by the dialog's section index:
-    // 3 = colonization, 6 = your starting situation.
+    // 3 = colonization, 6 = your starting situation, 10 = pirate empire.
     public static readonly Dictionary<int, UiRow[]> CommonBySection = new()
     {
         [3] = Colonization,
         [6] = StartingSituation,
+        [10] = PirateStartingSituation,
     };
 
     public static readonly UiRow[] All = BaseRows

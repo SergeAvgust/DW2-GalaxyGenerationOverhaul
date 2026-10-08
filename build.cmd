@@ -1,5 +1,5 @@
 @echo off
-rem Builds SpiralArms (Release) and deploys it into the game's mods folder.
+rem Builds Galaxy Generation Overhaul (Release) and deploys it into the game's mods folder.
 rem Override the game location with:  set GAMEDIR=D:\Games\Distant Worlds 2
 setlocal
 
@@ -11,7 +11,7 @@ dotnet build "%~dp0SpiralArms.csproj" -c Release -p:GameDir="%GAMEDIR%"
 if errorlevel 1 exit /b 1
 
 if not exist "%MODDIR%" mkdir "%MODDIR%"
-copy /y "%OUT%\SpiralArms.dll" "%MODDIR%\" >nul || exit /b 1
+copy /y "%OUT%\GalaxyGenerationOverhaul.dll" "%MODDIR%\" >nul || exit /b 1
 copy /y "%~dp0mod.json" "%MODDIR%\" >nul || exit /b 1
 
 echo Deployed to %MODDIR%

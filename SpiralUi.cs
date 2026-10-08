@@ -209,6 +209,17 @@ internal static class SpiralUi
                     Bootstrap.Log($"UI: starting-location picture moved from y {position.Y:F0} to {moved.Y:F0} (refugee fleet: same place).");
                 }
             }
+            // The pirate empire step has a picture of its own, in the same place relative to its rows.
+            if (section == 10)
+            {
+                FieldInfo? pirate = AccessTools.Field(dialog.GetType(), "StartingLocationTexturePositionPirate");
+                if (pirate?.GetValue(dialog) is Vector2 position && position != Vector2.Zero)
+                {
+                    var moved = new Vector2(position.X, position.Y + (y - startY));
+                    pirate.SetValue(dialog, moved);
+                    Bootstrap.Log($"UI: pirate starting-location picture moved from y {position.Y:F0} to {moved.Y:F0}.");
+                }
+            }
             Bootstrap.Log($"UI: added {rows.Length} row(s) to section {section} below y={bottom:F0} (panel height {panel.Size.Y:F0}).");
         }
         catch (Exception ex)
@@ -252,6 +263,18 @@ internal static class SpiralUi
 
                 // The same setting can appear in several stacks (the ring shapes), so bring the shown buttons up to date.
                 if (show && row.Buttons != null)
+                {
+                    int wanted = Math.Clamp(row.Get(), 0, row.Options.Length - 1);
+                    if (row.Buttons.ToggledButtonIndex != wanted)
+                    {
+                        row.Buttons.ToggleButton(wanted);
+                    }
+                }
+            }
+            // Rows of other sections share a setting with their twin on another step: bring every toggle up to date.
+            foreach (UiRow row in UiRows.CommonBySection.Values.SelectMany(r => r))
+            {
+                if (row.Buttons != null)
                 {
                     int wanted = Math.Clamp(row.Get(), 0, row.Options.Length - 1);
                     if (row.Buttons.ToggledButtonIndex != wanted)

@@ -22,6 +22,24 @@ public static class Bootstrap
     private static bool _started;
     private static string _logPath = string.Empty;
 
+    // The game's own log folder (next to SessionLog.txt), files of this mod are prefixed GalaxyGenerationOverhaul_.
+    // Falls back to the temp folder when it cannot be created.
+    internal static readonly string LogDirectory = ResolveLogDirectory();
+
+    private static string ResolveLogDirectory()
+    {
+        try
+        {
+            string dir = Path.Combine(AppContext.BaseDirectory, "data", "Logs");
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+        catch
+        {
+            return Path.GetTempPath();
+        }
+    }
+
     public static void Init()
     {
         if (_started)
@@ -31,7 +49,7 @@ public static class Bootstrap
         _started = true;
         if (_logPath.Length == 0)
         {
-            _logPath = Path.Combine(Path.GetTempPath(), "SpiralArms.log");
+            _logPath = Path.Combine(LogDirectory, "GalaxyGenerationOverhaul.log");
         }
 
         try

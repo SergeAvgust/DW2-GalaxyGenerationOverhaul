@@ -7,7 +7,7 @@ using HarmonyLib;
 namespace SpiralArms;
 
 // Splits the galaxy into one balanced region per empire (used by RegionPlacement), and after each generated game writes a map of the
-// regions and of where the capitals ended up (SpiralArms_regions.svg in the temp folder) plus a log summary.
+// regions and of where the capitals ended up (GalaxyGenerationOverhaul_regions.svg in the game log folder) plus a log summary.
 //
 //   1. Density: every star gets the number of other stars within the neighbour range (HomeSites.Ranges). Relative to the galaxy's
 //      median that makes it void / sparse / moderate / dense.
@@ -198,7 +198,7 @@ internal static class Regions
             Bootstrap.Log($"Regions: capital {capitals[i].Name}{(capitals[i].Player ? " (player)" : "")} is in region {capitalRegion[i]}.");
         }
 
-        string path = Path.Combine(Path.GetTempPath(), "SpiralArms_regions.svg");
+        string path = Path.Combine(Bootstrap.LogDirectory, "GalaxyGenerationOverhaul_regions.svg");
         File.WriteAllText(path, Svg(plan.Stars, candidates, plan.Cx, plan.Cy, plan.Sites, capitals, capitalRegion));
         Bootstrap.Log("Regions: map written to " + path);
     }

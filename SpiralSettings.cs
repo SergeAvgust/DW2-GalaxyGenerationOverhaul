@@ -56,7 +56,7 @@ internal static class SpiralSettings
     public static int ArmTaperIndex = 2;
     public static int CoreSizeIndex = 2;
     public static int RimThinningIndex = 2;
-    public static int NebulaPlacementIndex;
+    public static int NebulaPlacementIndex = 1;
 
     public static int ArmCount => (int)ArmCounts[ArmCountIndex].Value;
     public static float PitchRad => Winding[WindingIndex].Value * MathF.PI / 180f;
