@@ -110,7 +110,7 @@ internal static class UiRows
         new()
         {
             Group = "Classic", Key = "ClsField", Label = "Field Stars", Options = ShapeSettings.ClassicFieldShare, Shapes = Classic,
-            Hint = "How many stars are scattered evenly across the whole galaxy, relative to the ring and the central blob.",
+            Hint = "How many stars are scattered evenly across the whole galaxy, relative to the ring and the central blob. Minimal is an extremely sparse field with large voids, plus a few winding star bridges linking the blob to the ring.",
             Get = () => ShapeSettings.ClassicFieldShareIndex, Set = i => ShapeSettings.ClassicFieldShareIndex = i,
         },
         new()

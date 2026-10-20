@@ -46,8 +46,10 @@ internal static class ShapeSettings
     };
     public static readonly Option[] ClassicFieldShare =
     {
-        new("None", 0f), new("Low", 0.2f), new("Normal", 0.43f), new("High", 0.65f), new("Very high", 0.9f),
+        new("Minimal", 0.03f), new("Low", 0.2f), new("Normal", 0.43f), new("High", 0.65f), new("Very high", 0.9f),
     };
+    // Minimal replaces the old None: an extremely sparse field plus 2-4 winding bridges of stars from the center blob to the ring (see Placement.BridgePoints).
+    public const int ClassicFieldMinimalIndex = 0;
 
     // Ring radius as a fraction of the galaxy radius (vanilla 0.93).
     public static readonly Option[] ClassicRingRadius =

@@ -1,4 +1,4 @@
-﻿using DistantWorlds.Types;
+using DistantWorlds.Types;
 using Stride.Core.Mathematics;
 
 namespace SpiralArms;
@@ -142,6 +142,86 @@ internal static class Placement
 
     // ---- Classic ----
 
+    // Field Stars = Minimal: an extremely sparse field (large voids) plus a random number (4 to 7) of winding "bridges", each a
+    // string of stars from inside the center blob to the ring, so the galaxy stays one connected group for pathfinding.
+    // Along a bridge the stars are about BridgeSpacing apart plus a sideways wobble (links at most about 155M), under the
+    // usual jump ranges (250M exploration, 400M ships). Each sample draws a bridge point with a small chance; the vanilla
+    // rejection (too close to an existing system) drops repeats of a point that is already placed, so over the many
+    // candidate draws every point ends up used.
+    private const float BridgePickChance = 0.03f;
+    private const float BridgeSpacing = 120_000_000f;
+    private const float BridgeWobble = 0.2f;
+    private const float BridgeStartRadius = 0.35f;
+    private const int BridgeCurveSamples = 200;
+
+    private static int _bridgeSeed;
+    private static float _bridgeRadius;
+    private static float _bridgeRing = -1f;
+    private static Vector2[] _bridges = Array.Empty<Vector2>();
+
+    // Offsets from the galaxy center. Empty when blob and ring already touch (small ring radius).
+    private static Vector2[] BridgePoints(int seed, float galaxyRadius)
+    {
+        float ringRadius = ShapeSettings.V(ShapeSettings.ClassicRingRadius, ShapeSettings.ClassicRingRadiusIndex);
+        if (_bridgeSeed == seed && _bridgeRadius == galaxyRadius && _bridgeRing == ringRadius)
+        {
+            return _bridges;
+        }
+
+        float r0 = BridgeStartRadius * galaxyRadius;
+        float r1 = ringRadius * galaxyRadius;
+        var points = new List<Vector2>();
+        if (r1 - r0 > BridgeSpacing)
+        {
+            var rnd = new Random(seed ^ 0x51ED);
+            int count = 4 + rnd.Next(0, 4);
+            float baseAngle = ParamsFor(seed).RandomOffsetAngle;
+            for (int b = 0; b < count; b++)
+            {
+                // Bridges leave the blob at roughly even angles and may drift sideways on the way to the ring.
+                float a0 = baseAngle + (b + ((float)rnd.NextDouble() - 0.5f) * 0.5f) * TwoPi / count;
+                float a1 = a0 + ((float)rnd.NextDouble() * 2f - 1f) * 0.5f;
+                var start = new Vector2(MathF.Cos(a0) * r0, MathF.Sin(a0) * r0);
+                var end = new Vector2(MathF.Cos(a1) * r1, MathF.Sin(a1) * r1);
+                Vector2 chord = end - start;
+                var normal = new Vector2(-chord.Y, chord.X) / chord.Length();
+                Vector2 control = (start + end) * 0.5f + normal * (((float)rnd.NextDouble() * 2f - 1f) * 0.35f * chord.Length());
+
+                // Walk the quadratic curve and drop a star every BridgeSpacing of arc length.
+                Vector2 previous = start;
+                float sinceLast = 0f;
+                points.Add(start);
+                for (int i = 1; i <= BridgeCurveSamples; i++)
+                {
+                    float t = i / (float)BridgeCurveSamples;
+                    float u = 1f - t;
+                    Vector2 p = start * (u * u) + control * (2f * u * t) + end * (t * t);
+                    Vector2 delta = p - previous;
+                    float segment = delta.Length();
+                    sinceLast += segment;
+                    previous = p;
+                    if (sinceLast < BridgeSpacing && i < BridgeCurveSamples)
+                    {
+                        continue;
+                    }
+                    sinceLast = 0f;
+                    if (i < BridgeCurveSamples && segment > 0f)
+                    {
+                        var tangentNormal = new Vector2(-delta.Y, delta.X) / segment;
+                        p += tangentNormal * (((float)rnd.NextDouble() * 2f - 1f) * BridgeWobble * BridgeSpacing);
+                    }
+                    points.Add(p);
+                }
+            }
+        }
+
+        _bridges = points.ToArray();
+        _bridgeSeed = seed;
+        _bridgeRadius = galaxyRadius;
+        _bridgeRing = ringRadius;
+        return _bridges;
+    }
+
     private static void SampleClassic(GameStartSettings settings, Random rnd, float galaxyRadius, out float x, out float y)
     {
         float ring = ShapeSettings.V(ShapeSettings.ClassicRingShare, ShapeSettings.ClassicRingShareIndex);
@@ -154,8 +234,20 @@ internal static class Placement
             total = 1f;
         }
 
-        float pick = (float)rnd.NextDouble() * total;
         float vx, vy;
+        if (ShapeSettings.ClassicFieldShareIndex == ShapeSettings.ClassicFieldMinimalIndex && rnd.NextDouble() < BridgePickChance)
+        {
+            Vector2[] chain = BridgePoints(settings.RandomSeed, galaxyRadius);
+            if (chain.Length > 0)
+            {
+                Vector2 p = chain[rnd.Next(0, chain.Length)];
+                x = galaxyRadius + p.X;
+                y = galaxyRadius + p.Y;
+                return;
+            }
+        }
+
+        float pick = (float)rnd.NextDouble() * total;
         if (pick < ring)
         {
             // Vanilla Classic ring: width is 0.9 of the shared ring width (0.13R).
