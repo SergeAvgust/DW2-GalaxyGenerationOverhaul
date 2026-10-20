@@ -12,6 +12,5 @@ if errorlevel 1 exit /b 1
 
 if not exist "%MODDIR%" mkdir "%MODDIR%"
 copy /y "%OUT%\GalaxyGenerationOverhaul.dll" "%MODDIR%\" >nul || exit /b 1
-copy /y "%~dp0mod.json" "%MODDIR%\" >nul || exit /b 1
 
 echo Deployed to %MODDIR%

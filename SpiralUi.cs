@@ -31,6 +31,12 @@ internal static class SpiralUi
     private static Vector2 _vanillaPreviewPosition;
     private static Vector2 _shapedPreviewPosition;
     private static bool _previewPositionsKnown;
+    private static Vector2 _vanillaPreviewSize;
+    private static DWPanel? _galaxyPanel;
+    private static FieldInfo? _sectionContainerField;
+    // The preview is never shrunk below this share of its normal size.
+    private const float MinPreviewScale = 0.3f;
+    private static int _loggedGeometry;
 
     public static void Install(Harmony harmony)
     {
@@ -56,6 +62,17 @@ internal static class SpiralUi
 
             Patch(harmony, dialogType, "AddControlsToPanel", nameof(PostAddControls));
             Patch(harmony, dialogType, "ShowSection", nameof(PostRefreshVisibility));
+            MethodInfo? render = dialogType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(m => m.Name == "Render" && m.GetParameters().Length == 4 && m.DeclaringType == dialogType);
+            if (render != null)
+            {
+                harmony.Patch(render, prefix: new HarmonyMethod(typeof(SpiralUi).GetMethod(nameof(RenderPrefix), BindingFlags.Static | BindingFlags.NonPublic)));
+                Bootstrap.Log("UI: patched StartNewGameDialog.Render (preview only on the first page)");
+            }
+            else
+            {
+                Bootstrap.Log("UI: StartNewGameDialog.Render not found; the preview strip on the next page stays.");
+            }
             Patch(harmony, dialogType, "BindData", nameof(PostRefreshVisibility));
             Patch(harmony, dialogType, "GalaxySettingsChangedPreProcessCore", nameof(PostRefreshVisibility));
         }
@@ -131,6 +148,9 @@ internal static class SpiralUi
 
             // Move the preview to the right of the rows: left edge past the widest row, right edge at the panel border.
             var previewSize = (Vector2)_previewSizeField!.GetValue(__instance)!;
+            _vanillaPreviewSize = previewSize;
+            _galaxyPanel = panel;
+            _sectionContainerField ??= AccessTools.Field(typeof(StartNewGameDialog), "_SectionContainer");
             _vanillaPreviewPosition = (Vector2)_previewPositionField!.GetValue(__instance)!;
             float widestRow = labelWidth + gap + Rows.Max(r => RowWidth(r.Options.Length, buttonWidth, buttonGap));
             _shapedPreviewPosition = new Vector2(Math.Max(panel.Size.X - previewSize.X - gap, widestRow + gap), firstY);
@@ -249,6 +269,35 @@ internal static class SpiralUi
         ApplyVisibility(__instance);
     }
 
+    // The size the preview has on the first page (what ApplyVisibility worked out); null until then.
+    private static Vector2? _fittedPreviewSize;
+    private static int _lastRenderStep = -1;
+
+    // Runs before every frame of the dialog. The dialog draws the preview on the first page and also on the next one, where the first
+    // page's panel (moved aside) still leaves a strip of the preview in view; so it has no size there. Step changes are not reported
+    // through any hook that fires on the Next and Previous buttons, so this is decided here.
+    private static void RenderPrefix(StartNewGameDialog __instance)
+    {
+        try
+        {
+            if (_fittedPreviewSize is not Vector2 fitted || _previewSizeField == null)
+            {
+                return;
+            }
+            int step = __instance.ResolveStepIndex(__instance.StartNewGame_Index);
+            if (step != _lastRenderStep)
+            {
+                _lastRenderStep = step;
+                Bootstrap.Log($"UI: dialog step is now {step}; the preview is {(step == 0 ? "shown" : "hidden")}.");
+            }
+            _previewSizeField.SetValue(__instance, step == 0 ? fitted : new Vector2(0f, 0f));
+        }
+        catch (Exception ex)
+        {
+            Bootstrap.Log("UI: preview render hook failed: " + ex.Message);
+        }
+    }
+
     private static void ApplyVisibility(StartNewGameDialog dialog)
     {
         try
@@ -289,7 +338,54 @@ internal static class SpiralUi
             }
             if (_previewPositionsKnown)
             {
-                _previewPositionField!.SetValue(dialog, anyRows ? _shapedPreviewPosition : _vanillaPreviewPosition);
+                Vector2 position = anyRows ? _shapedPreviewPosition : _vanillaPreviewPosition;
+                Vector2 size = _vanillaPreviewSize;
+                // The preview keeps its shape but shrinks to the room that is left: below the last row of the screen's panel, or right of the extra rows.
+                var panel = _galaxyPanel;
+                var container = _sectionContainerField?.GetValue(dialog) as DWPanel;
+                if (panel != null && container != null)
+                {
+                    float gap = UserInterfaceHelper.CalculateScaledValue(10f);
+                    // The preview is drawn at (panel's screen position + position), so the room is what is left of the visible container
+                    // (in screen coordinates) from that point.
+                    RectangleF panelRect = panel.CalculateAbsoluteRectangle();
+                    RectangleF containerRect = container.CalculateAbsoluteRectangle();
+                    // The section panels slide sideways as pages change, so the panel's current screen position says nothing about the room:
+                    // the galaxy page's panel sits at the container's corner while it is shown, and the container is what the preview must stay inside.
+                    float width = containerRect.Width;
+                    float height = containerRect.Height;
+                    // The pages sit side by side and the neighbouring page begins a little before this panel's right edge (a strip of the preview
+                    // showed at the left of the next page when it came closer than that), so keep well clear of the right edge.
+                    float rightMargin = UserInterfaceHelper.CalculateScaledValue(90f);
+                    float room = Math.Min((width - rightMargin - position.X) / size.X, (height - position.Y - gap) / size.Y);
+                    if (_loggedGeometry++ < 40)
+                    {
+                        Bootstrap.Log($"UI: preview geometry: ui scale {UserInterfaceHelper.CalculateScaledValue(100f):0}%, panel {panelRect.X:0},{panelRect.Y:0} {panelRect.Width:0}x{panelRect.Height:0}, "
+                            + $"container {containerRect.X:0},{containerRect.Y:0} {containerRect.Width:0}x{containerRect.Height:0}, preview at {position.X:0},{position.Y:0} size {size.X:0}x{size.Y:0}, "
+                            + $"extra rows {anyRows}, room factor {room:0.00}.");
+                    }
+                    float scale = Math.Clamp(room, MinPreviewScale, 1f);
+                    size = new Vector2(size.X * scale, size.Y * scale);
+                    if (anyRows)
+                    {
+                        // right-aligned to the panel edge, but never over the rows
+                        position = new Vector2(Math.Max(_shapedPreviewPosition.X, width - rightMargin - size.X), position.Y);
+                    }
+                }
+                // The dialog also draws the preview on the next page (galaxy settings), at the place the first page now holds, which is
+                // shifted aside but still overlaps the visible area by a strip: that strip is the preview's right end. Nothing is drawn there.
+                int step = dialog.ResolveStepIndex(dialog.StartNewGame_Index);
+                if (step != 0)
+                {
+                    size = new Vector2(0f, 0f);
+                }
+                if (_loggedGeometry < 40)
+                {
+                    Bootstrap.Log($"UI: preview set: step {step}, position {position.X:0},{position.Y:0}, size {size.X:0}x{size.Y:0}.");
+                }
+                _previewPositionField!.SetValue(dialog, position);
+                _previewSizeField!.SetValue(dialog, size);
+                _fittedPreviewSize = step == 0 ? size : _fittedPreviewSize;
             }
         }
         catch (Exception ex)
