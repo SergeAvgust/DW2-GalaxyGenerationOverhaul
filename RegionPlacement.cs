@@ -30,6 +30,9 @@ internal static class RegionPlacement
     // the galaxy has gained systems by then).
     public static Regions.Plan? LastPlan;
 
+    // The region an empire was given when the capitals were placed (only the regular empires get one; pirates and Shadowport factions do not).
+    public static bool TryGetAssignedRegion(short empireId, out int region) => _assigned.TryGetValue(empireId, out region);
+
     public static int MinDensity => (int)StarClasses[StarClassIndex].Value;
 
     private static bool _game;
@@ -84,6 +87,99 @@ internal static class RegionPlacement
         {
             Bootstrap.Log("RegionPlacement: StarSystemListExtensions.CalculateSystemTimes not found; sites outside a region can only be rejected.");
         }
+
+        // The search asks OrbList.FindNearestByPathWithPrecalculatedSystemTimes for the nearest planet of the wanted types. When that is
+        // not in the region (or there is none), the answer is replaced by a planet of the region (made if need be).
+        MethodInfo? nearest = AccessTools.Method(typeof(OrbList), "FindNearestByPathWithPrecalculatedSystemTimes");
+        if (nearest != null)
+        {
+            harmony.Patch(nearest, postfix: Own(nameof(NearestPostfix)));
+        }
+        else
+        {
+            Bootstrap.Log("RegionPlacement: OrbList.FindNearestByPathWithPrecalculatedSystemTimes not found; capitals may land outside their region.");
+        }
+    }
+
+    private const int MaxOffers = 40;
+    private static readonly HashSet<int> _offered = new();
+
+    // Parameter names must match the original's so Harmony can bind them by name.
+    private static void NearestPostfix(Galaxy galaxy, StarSystemList excludedSystems, OrbTypeList orbTypes, ref Orb? __result)
+    {
+        if (_activeRegion < 0 || _plan == null || _activeSite == null)
+        {
+            return;
+        }
+        try
+        {
+            if (__result != null)
+            {
+                StarSystem? found = SystemOf(galaxy, __result);
+                if (found != null && _plan.RegionOfSystem.TryGetValue(found.SystemId, out int r) && r == _activeRegion)
+                {
+                    return;
+                }
+            }
+            if (orbTypes == null || orbTypes.Count == 0 || _offered.Count >= MaxOffers)
+            {
+                return;
+            }
+            var types = new List<byte>();
+            foreach (OrbType t in orbTypes)
+            {
+                types.Add(t.OrbTypeId);
+            }
+            Regions.Star middle = _plan.Sites[_activeRegion]!;
+            List<StarSystem> ordered = _plan.Members[_activeRegion]
+                .OrderBy(m => (m.X - middle.X) * (m.X - middle.X) + (m.Y - middle.Y) * (m.Y - middle.Y))
+                .Select(m => galaxy.Systems.TryGetValue(m.Id, out StarSystem? sys) ? sys : null)
+                .Where(sys => sys != null && sys.ColonyCount == 0 && (excludedSystems == null || !excludedSystems.ContainsId(sys.SystemId)))
+                .Select(sys => sys!)
+                .ToList();
+            Orb? pick = FirstUnoffered(ordered, types);
+            if (pick == null)
+            {
+                foreach (StarSystem system in ordered)
+                {
+                    if (TryForgeNativePlanet(galaxy, system, types[0]))
+                    {
+                        Bootstrap.Log($"RegionPlacement: region {_activeRegion} had no usable planet for the search; made one in system {system.SystemId}.");
+                        pick = FirstUnoffered(new List<StarSystem> { system }, types);
+                        break;
+                    }
+                }
+            }
+            if (pick != null)
+            {
+                _offered.Add(pick.OrbId);
+                Bootstrap.Log($"RegionPlacement: the search found {(__result == null ? "nothing" : "a planet outside the region")}; offering planet {pick.OrbId} of the region instead.");
+                __result = pick;
+            }
+        }
+        catch (Exception ex)
+        {
+            Bootstrap.Log("RegionPlacement.NearestPostfix: " + ex.Message);
+        }
+    }
+
+    private static Orb? FirstUnoffered(List<StarSystem> systems, List<byte> types)
+    {
+        foreach (StarSystem system in systems)
+        {
+            if (system.MajorOrbs == null)
+            {
+                continue;
+            }
+            foreach (Orb orb in system.MajorOrbs)
+            {
+                if (orb != null && orb.Category == OrbCategory.Planet && types.Contains(orb.TypeId) && !_offered.Contains(orb.OrbId))
+                {
+                    return orb;
+                }
+            }
+        }
+        return null;
     }
 
     // Far beyond any real travel time, so a planet outside the region is only found when the region has no native planet at all.
@@ -201,6 +297,7 @@ internal static class RegionPlacement
             _activeRegion = region;
             _activeSite = site;
             _rejectionLogs = 0;
+            _offered.Clear();
             Bootstrap.Log($"RegionPlacement: {empire.Name}{(IsPlayer(empire) ? " (player)" : "")} -> region {region} ({_plan.Sizes[region]} stars), search starts at system {site.SystemId} ({site.GalaxyX / 1e6f:0}M, {site.GalaxyY / 1e6f:0}M).");
         }
         catch (Exception ex)

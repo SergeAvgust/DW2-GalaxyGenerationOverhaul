@@ -82,6 +82,10 @@ internal static class SpiralUi
     {
         if (UiRows.CommonBySection.TryGetValue(index, out UiRow[]? common))
         {
+            if (index == 3)
+            {
+                VanillaExtras.AddButtons(__instance);
+            }
             AddCommonRows(__instance, galaxy, empire, panel, index, common);
             return;
         }

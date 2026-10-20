@@ -91,6 +91,7 @@ public static class Bootstrap
             Regions.Install(harmony);
             RegionPlacement.Install(harmony);
             SizeLimits.Install(harmony);
+            VanillaExtras.Install(harmony);
             SpiralUi.Install(harmony);
         }
         catch (Exception ex)

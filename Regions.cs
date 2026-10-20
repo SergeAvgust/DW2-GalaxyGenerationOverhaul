@@ -159,31 +159,47 @@ internal static class Regions
 
     private static void Analyse(Galaxy galaxy)
     {
-        var capitals = new List<(string Name, bool Player, float X, float Y)>();
+        // Empires given a region by RegionPlacement are the "regular" ones; pirates, Shadowport factions and the like are only drawn.
+        Plan? placed = RegionPlacement.LastPlan;
+        var capitals = new List<(string Name, bool Player, float X, float Y, int Assigned)>();
+        var others = new List<(string Name, float X, float Y)>();
         foreach (Empire e in galaxy.Empires)
         {
-            if (e.Capital != null && !e.IsPirate)
+            if (e.Capital == null)
             {
-                capitals.Add((e.Name, e.IsPlayer, e.Capital.GalaxyX / 1e6f, e.Capital.GalaxyY / 1e6f));
+                continue;
+            }
+            float cx = e.Capital.GalaxyX / 1e6f, cy = e.Capital.GalaxyY / 1e6f;
+            if (placed != null)
+            {
+                if (RegionPlacement.TryGetAssignedRegion(e.EmpireId, out int assigned))
+                {
+                    capitals.Add((e.Name, e.IsPlayer, cx, cy, assigned));
+                }
+                else
+                {
+                    others.Add((e.Name, cx, cy));
+                }
+            }
+            else if (!e.IsPirate)
+            {
+                capitals.Add((e.Name, e.IsPlayer, cx, cy, -1));
             }
         }
         int k = capitals.Count;
-        Plan? plan = RegionPlacement.LastPlan ?? Build(galaxy, k, RegionPlacement.MinDensity);
-        if (plan != null && plan.K != k)
-        {
-            plan = Build(galaxy, k, RegionPlacement.MinDensity);
-        }
+        Plan? plan = placed ?? Build(galaxy, k, RegionPlacement.MinDensity);
         if (plan == null)
         {
             Bootstrap.Log($"Regions: nothing to do ({galaxy.Systems.Count} stars, {k} empires).");
             return;
         }
+        k = plan.K;
         List<Star> candidates = plan.Candidates;
 
         // where the capitals ended up: region of the nearest candidate star
         var perRegion = new int[k];
-        var capitalRegion = new int[k];
-        for (int i = 0; i < k; i++)
+        var capitalRegion = new int[capitals.Count];
+        for (int i = 0; i < capitals.Count; i++)
         {
             Star nearest = candidates.OrderBy(s => Dist2(s.X, s.Y, capitals[i].X, capitals[i].Y)).First();
             capitalRegion[i] = nearest.Region;
@@ -193,13 +209,18 @@ internal static class Regions
         Bootstrap.Log($"Regions: {plan.Stars.Count} stars, range {plan.Range:0}M, median {plan.Median:0} neighbours; void {plan.ByDensity[0]}, sparse {plan.ByDensity[1]}, moderate {plan.ByDensity[2]}, dense {plan.ByDensity[3]}.");
         Bootstrap.Log($"Regions: {k} regions of {plan.Sizes.Min()}..{plan.Sizes.Max()} stars (ideal {candidates.Count / (float)k:0}), {plan.Dropped} candidate stars left out in pieces too small for a region; "
             + $"capitals: {perRegion.Count(c => c == 0)} regions without one, {perRegion.Count(c => c > 1)} with more than one.");
-        for (int i = 0; i < k; i++)
+        for (int i = 0; i < capitals.Count; i++)
         {
-            Bootstrap.Log($"Regions: capital {capitals[i].Name}{(capitals[i].Player ? " (player)" : "")} is in region {capitalRegion[i]}.");
+            string wanted = capitals[i].Assigned >= 0 && capitals[i].Assigned != capitalRegion[i] ? $" (wanted region {capitals[i].Assigned})" : "";
+            Bootstrap.Log($"Regions: capital {capitals[i].Name}{(capitals[i].Player ? " (player)" : "")} is in region {capitalRegion[i]}{wanted}.");
+        }
+        if (others.Count > 0)
+        {
+            Bootstrap.Log($"Regions: {others.Count} further capitals without a region (pirate and Shadowport factions).");
         }
 
         string path = Path.Combine(Bootstrap.LogDirectory, "GalaxyGenerationOverhaul_regions.svg");
-        File.WriteAllText(path, Svg(plan.Stars, candidates, plan.Cx, plan.Cy, plan.Sites, capitals, capitalRegion));
+        File.WriteAllText(path, Svg(plan.Stars, candidates, plan.Cx, plan.Cy, plan.Sites, capitals, capitalRegion, others));
         Bootstrap.Log("Regions: map written to " + path);
     }
 
@@ -543,7 +564,7 @@ internal static class Regions
     }
 
     private static string Svg(List<Star> stars, List<Star> candidates, float[] cx, float[] cy, Star?[] sites,
-        List<(string Name, bool Player, float X, float Y)> capitals, int[] capitalRegion)
+        List<(string Name, bool Player, float X, float Y, int Assigned)> capitals, int[] capitalRegion, List<(string Name, float X, float Y)> others)
     {
         float minX = stars.Min(s => s.X), maxX = stars.Max(s => s.X), minY = stars.Min(s => s.Y), maxY = stars.Max(s => s.Y);
         float scale = 1000f / Math.Max(maxX - minX, maxY - minY);
@@ -576,9 +597,22 @@ internal static class Regions
             string stroke = capitals[i].Player ? "#ffd400" : "#ff3030";
             string x = X(capitals[i].X), y = Y(capitals[i].Y);
             sb.Append($"<path d='M{x} {y}m-7 -7l14 14m0 -14l-14 14' stroke='{stroke}' stroke-width='3'/>\n");
-            sb.Append($"<text x='{x}' y='{y}' dx='9' dy='16' fill='{stroke}' font-size='12' font-family='sans-serif'>{System.Security.SecurityElement.Escape(capitals[i].Name)} (r{capitalRegion[i]})</text>\n");
+            int assigned = capitals[i].Assigned;
+            if (assigned >= 0 && assigned != capitalRegion[i] && assigned < sites.Length && sites[assigned] is Star wantedSite)
+            {
+                // outside its region: dashed line to the region it was meant for
+                sb.Append($"<line x1='{x}' y1='{y}' x2='{X(wantedSite.X)}' y2='{Y(wantedSite.Y)}' stroke='{stroke}' stroke-width='1.5' stroke-dasharray='5 4'/>\n");
+            }
+            string label = assigned >= 0 && assigned != capitalRegion[i] ? $"r{capitalRegion[i]}, wanted r{assigned}" : $"r{capitalRegion[i]}";
+            sb.Append($"<text x='{x}' y='{y}' dx='9' dy='16' fill='{stroke}' font-size='12' font-family='sans-serif'>{System.Security.SecurityElement.Escape(capitals[i].Name)} ({label})</text>\n");
         }
-        sb.Append("<text x='20' y='14' fill='#bbb' font-size='12' font-family='sans-serif'>coloured = region (dense dots larger); grey = sparse / void; white ring = region site; X = vanilla capital (yellow = player)</text>\n");
+        // pirate and Shadowport capitals have no region: small orange diamonds, no label
+        foreach (var other in others)
+        {
+            string x = X(other.X), y = Y(other.Y);
+            sb.Append($"<path d='M{x} {y}m0 -5l5 5l-5 5l-5 -5z' fill='#ff9a1f' fill-opacity='0.85'><title>{System.Security.SecurityElement.Escape(other.Name)}</title></path>\n");
+        }
+        sb.Append("<text x='20' y='14' fill='#bbb' font-size='12' font-family='sans-serif'>coloured = region (dense dots larger); grey = sparse / void; white ring = region site; X = capital (yellow = player; dashed line = outside its region); orange diamond = pirate / Shadowport, no region</text>\n");
         sb.Append("</svg>\n");
         return sb.ToString();
     }

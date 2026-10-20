@@ -30,6 +30,19 @@ internal static class Habitability
     };
     public static int QualityIndex = 2;
 
+    // The vanilla Habitable Planets row gets a sixth button, "Scripted only" (see VanillaExtras): its value is below this and no habitable
+    // planet is drawn while the stars are generated. The planets made on purpose remain (capitals made in a region by RegionPlacement,
+    // planets of scripted events), so it needs Balanced regions for the capitals.
+    public const float ScriptedOnlyBelow = 0.3f;
+
+    // What the Habitable Planets buttons say right now, kept up to date by VanillaExtras (0 until the dialog has been used). Galaxy.Generate
+    // swaps GameStartSettings.OrbQuality for the quality factor, and the menu runs overlapping preview generations on the same settings
+    // object, so a restore from a saved copy can put a swapped value back; this mirror is what gets restored instead.
+    public static float ButtonValue;
+    // True while a real galaxy is generated with Independent Colonies = None: colonies of the independent empire are not created at all,
+    // including the ones scripted events make.
+    private static volatile bool _independentsNone;
+
     // Set while GenerateStarSystems runs; read by the pick patch.
     private static volatile bool _inStarGeneration;
     private static float _multiplier = 1f;
@@ -42,6 +55,14 @@ internal static class Habitability
     {
         Patch(harmony, typeof(Galaxy), "Generate", prefix: nameof(GeneratePrefix), finalizer: nameof(GenerateFinalizer));
         Patch(harmony, typeof(Galaxy), "GenerateStarSystems", prefix: nameof(StarsPrefix), finalizer: nameof(StarsFinalizer));
+        // Planet and moon types are drawn in GenerateStarSystem / GenerateOrb (every overload), whichever thread runs them.
+        foreach (MethodInfo m in typeof(Galaxy).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+        {
+            if (m.Name == "GenerateStarSystem" || m.Name == "GenerateOrb")
+            {
+                harmony.Patch(m, prefix: Own(nameof(OrbPrefix)), finalizer: Own(nameof(OrbFinalizer)));
+            }
+        }
         MethodInfo? pick = AccessTools.Method(typeof(OrbTypeFactorList), "SelectRandomFactor", new[] { typeof(Random), typeof(float) });
         if (pick == null)
         {
@@ -50,6 +71,27 @@ internal static class Habitability
         else
         {
             harmony.Patch(pick, prefix: Own(nameof(PickPrefix)));
+        }
+
+        MethodInfo? independents = AccessTools.Method(typeof(Galaxy), "GenerateIndependentColonies");
+        if (independents == null)
+        {
+            Bootstrap.Log("Habitability: Galaxy.GenerateIndependentColonies not found; the Independents None option is disabled.");
+        }
+        else
+        {
+            harmony.Patch(independents, prefix: Own(nameof(IndependentsPrefix)));
+        }
+
+        MethodInfo? colonyAtOrb = typeof(Galaxy).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .FirstOrDefault(m => m.Name == "GenerateColonyAtOrb" && m.GetParameters().Any(p => p.Name == "allowQualityAdjustment"));
+        if (colonyAtOrb == null)
+        {
+            Bootstrap.Log("Habitability: Galaxy.GenerateColonyAtOrb not found; events can still make independent colonies with Independents None.");
+        }
+        else
+        {
+            harmony.Patch(colonyAtOrb, prefix: Own(nameof(ColonyAtOrbPrefix)));
         }
 
         // The vanilla row is now the frequency, say so.
@@ -95,10 +137,17 @@ internal static class Habitability
     // Parameter names must match the original's so Harmony can bind them by name.
     private static void GeneratePrefix(GameStartSettings settings, out float __state)
     {
-        __state = settings.OrbQuality;
+        __state = ButtonValue > 0f ? ButtonValue : settings.OrbQuality;
+        _pickCalls = 0;
+        _independentsNone = settings.StarCount > 0 && settings.AlienLifePrevalence <= 0f;
         try
         {
-            _multiplier = FrequencyFactors[NearestLevel(settings.OrbQuality)];
+            bool scriptedOnly = __state < ScriptedOnlyBelow;
+            _multiplier = scriptedOnly ? 0f : FrequencyFactors[NearestLevel(__state)];
+            if (scriptedOnly && RegionPlacement.MethodIndex != 1)
+            {
+                Bootstrap.Log("Habitability: WARNING: no natural habitable planets with the Standard empire placement; capitals may not be found. Use Balanced regions.");
+            }
             settings.OrbQuality = Quality[QualityIndex].Value;
         }
         catch (Exception ex)
@@ -107,13 +156,46 @@ internal static class Habitability
         }
     }
 
-    private static Exception? GenerateFinalizer(GameStartSettings settings, float __state, Exception? __exception)
+    private static Exception? GenerateFinalizer(Galaxy __instance, GameStartSettings settings, float __state, Exception? __exception)
     {
         settings.OrbQuality = __state;
+        _independentsNone = false;
+        if (__exception == null && settings.StarCount > 0)
+        {
+            try
+            {
+                int habitable = 0;
+                foreach (Orb orb in __instance.Orbs)
+                {
+                    if (orb != null && IsHabitableType(orb.TypeId))
+                    {
+                        habitable++;
+                    }
+                }
+                int independents = __instance.GetIndependentEmpire()?.Colonies?.Count ?? 0;
+                Bootstrap.Log($"Habitability: at the end of generation: {habitable} planets of habitable types, {independents} independent colonies "
+                    + $"(button value {__state:0.##}, multiplier x{_multiplier:0.##}, {_pickCalls} type picks seen in star generation).");
+            }
+            catch (Exception ex)
+            {
+                Bootstrap.Log("Habitability: end-of-generation count failed: " + ex.Message);
+            }
+        }
         return __exception;
     }
 
     // ---- Galaxy.GenerateStarSystems: where planet types are drawn ----
+
+    [ThreadStatic] private static int _orbDepth;
+    private static int _pickCalls;
+
+    private static void OrbPrefix() => _orbDepth++;
+
+    private static Exception? OrbFinalizer(Exception? __exception)
+    {
+        _orbDepth--;
+        return __exception;
+    }
 
     private static void StarsPrefix()
     {
@@ -162,10 +244,11 @@ internal static class Habitability
     // with habitable types counted `_multiplier` times heavier. Lists without a habitable type, or a multiplier of 1, run the original.
     private static bool PickPrefix(OrbTypeFactorList __instance, Random rnd, float minimumFactor, ref OrbTypeFactor __result)
     {
-        if (!_inStarGeneration)
+        if (!_inStarGeneration && _orbDepth <= 0)
         {
             return true;
         }
+        Interlocked.Increment(ref _pickCalls);
         try
         {
             bool[] habitable = HabitableTypes();
@@ -187,7 +270,7 @@ internal static class Habitability
             {
                 return true;
             }
-            if (multiplier == 1f)
+            if (multiplier == 1f || total - habitableWeight <= 0)
             {
                 return true;
             }
@@ -226,6 +309,39 @@ internal static class Habitability
         }
     }
 
+    // Colonies made by scripted events for the independent empire (an event passes no empire, or the independent one). The callers drop the result.
+    private static bool ColonyAtOrbPrefix(Galaxy __instance, Empire empire, ref Colony? __result)
+    {
+        if (!_independentsNone)
+        {
+            return true;
+        }
+        try
+        {
+            if (empire != null && empire.EmpireId != __instance.GetIndependentEmpire()?.EmpireId)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            return true;
+        }
+        __result = null;
+        return false;
+    }
+
+    // The vanilla Independent Colonies row gets a sixth button, "None", which stores 0.
+    private static bool IndependentsPrefix(GameStartSettings settings)
+    {
+        if (settings.AlienLifePrevalence > 0f)
+        {
+            return true;
+        }
+        Bootstrap.Log("Independents: none generated (option).");
+        return false;
+    }
+
     // ---- labels of the vanilla row ----
 
     private static void TextPostfix(string tag, ref string __result)
@@ -238,7 +354,9 @@ internal static class Habitability
             case "Colony Prevalence Explanation":
                 __result = "How common habitable planets and moons are: types that can be colonised at all, from Continental and Ocean worlds to "
                     + "desert, ice, tundra and volcanic ones, which are poor but may suit some races. Gas giants and bare rock are not counted. "
-                    + "This changes how many there are, not how good they are; that is Planet Quality below.\n\nThe other settings that "
+                    + "This changes how many there are, not how good they are; that is Planet Quality below.\n\nScripted only generates none by chance: "
+                    + "the only habitable planets are those made on purpose, such as the home planets of the empires and planets placed by events. "
+                    + "It needs Empire Placement set to Balanced regions, which makes a home planet in each region.\n\nThe other settings that "
                     + "change the number of potential colonies are the Independent Colonies setting and the star count.";
                 break;
         }
