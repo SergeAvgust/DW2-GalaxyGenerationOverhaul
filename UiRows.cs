@@ -9,6 +9,9 @@ internal sealed class UiRow
 {
     public required string Group;
     public required string Key;
+    // The setting the row edits, when several rows edit the same one (the ring shapes, the two pages with Galaxy Knowledge). Keeps it between sessions.
+    public string? Setting;
+    public string SettingName => Setting ?? Key;
     public required string Label;
     public required string Hint;
     public required Option[] Options;
@@ -199,7 +202,7 @@ internal static class UiRows
         GalaxyShape[] shapes = { shape };
         UiRow Row(string key, string label, string hint, SpiralSettings.Option[] options, Func<int> get, Action<int> set) => new()
         {
-            Group = group, Key = key + group, Label = label, Hint = hint, Options = options, Shapes = shapes, Get = get, Set = set,
+            Group = group, Key = key + group, Setting = key, Label = label, Hint = hint, Options = options, Shapes = shapes, Get = get, Set = set,
         };
 
         yield return Row("RingEcc", "Eccentricity",
@@ -281,7 +284,7 @@ internal static class UiRows
     {
         new()
         {
-            Group = "PirateStartingSituation", Key = "GalaxyKnowledgePirate", Label = StartingSituation[0].Label, Options = Exploration.Modes, Shapes = Array.Empty<GalaxyShape>(),
+            Group = "PirateStartingSituation", Key = "GalaxyKnowledgePirate", Setting = "GalaxyKnowledge", Label = StartingSituation[0].Label, Options = Exploration.Modes, Shapes = Array.Empty<GalaxyShape>(),
             Hint = StartingSituation[0].Hint,
             Get = () => Exploration.ModeIndex, Set = i => Exploration.ModeIndex = i,
         },

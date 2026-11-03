@@ -1,0 +1,7 @@
+## Unreleased
+- added Settings Keeper integration (remembers all settings)
+- improved "none" independents compatibility with other mods
+
+## 0.4.0
+- fixed ui scaling issue (now galaxy preview scales across all ui sizes)
+- improved balanced regions empire placement

@@ -73,6 +73,13 @@ internal static class SpiralUi
             {
                 Bootstrap.Log("UI: StartNewGameDialog.Render not found; the preview strip on the next page stays.");
             }
+            // Every time the dialog is bound (the screen opens) the kept choices are put back first, so the buttons are set from them below.
+            MethodInfo? bind = AccessTools.Method(dialogType, "BindData");
+            if (bind != null)
+            {
+                harmony.Patch(bind, prefix: new HarmonyMethod(typeof(SpiralUi).GetMethod(nameof(PreBind), BindingFlags.Static | BindingFlags.NonPublic)));
+            }
+            KeeperLink.Install();
             Patch(harmony, dialogType, "BindData", nameof(PostRefreshVisibility));
             Patch(harmony, dialogType, "GalaxySettingsChangedPreProcessCore", nameof(PostRefreshVisibility));
         }
@@ -264,6 +271,20 @@ internal static class SpiralUi
         return MaxFullWidthButtons * buttonWidth + (MaxFullWidthButtons - 1) * buttonGap;
     }
 
+    // Parameter names must match the original's so Harmony can bind them by name.
+    private static void PreBind(GameStartSettings gameStartSettings)
+    {
+        try
+        {
+            KeeperLink.RestoreAll();
+            Habitability.RestoreButtonValue(gameStartSettings);
+        }
+        catch (Exception ex)
+        {
+            Bootstrap.Log("UI: restoring kept choices failed: " + ex.Message);
+        }
+    }
+
     private static void PostRefreshVisibility(StartNewGameDialog __instance)
     {
         ApplyVisibility(__instance);
@@ -406,6 +427,7 @@ internal static class SpiralUi
                 if (row != null && group.ToggledButtonIndex >= 0)
                 {
                     row.Set(group.ToggledButtonIndex);
+                    KeeperLink.Remember(row, group.ToggledButtonIndex);
                 }
             }
         }
