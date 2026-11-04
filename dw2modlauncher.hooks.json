@@ -1,8 +1,279 @@
 {
   "schema": 1,
-  "modVersion": "0.4.0",
+  "modVersion": "0.5.0",
   "gameVersion": "1.3.8.4",
-  "hooks": [],
+  "hooks": [
+    {
+      "target": "DistantWorlds.Types.Galaxy:CheckCanCreateColonyAtOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.Empire,System.Int32,System.Int32,System.Single,System.Single,System.Boolean,System.Boolean&,DistantWorlds.Types.Orb)",
+      "kind": "postfix",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:DetermineCloudSettingsCenter(System.Random,DistantWorlds.Types.GameStartSettings,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single&,System.Single&,System.Single&,System.String&,System.Single&)",
+      "kind": "postfix",
+      "effect": "changes-args"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:DetermineCloudSettingsRing(System.Random,DistantWorlds.Types.GameStartSettings,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single&,System.Single&,System.Single&,System.String&,System.Single&)",
+      "kind": "postfix",
+      "effect": "changes-args"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:DetermineCloudSettingsSpiralArm(System.Random,DistantWorlds.Types.GameStartSettings,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single&,System.Single&,System.Single&,System.String&,System.Single&)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:DeterminePointCenter(System.Random,DistantWorlds.Types.GameStartSettings,System.Single,System.Single&,System.Single&)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:DeterminePointCenterEased(System.Random,DistantWorlds.Types.GameStartSettings,System.Single,System.Single&,System.Single&)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:DeterminePointCluster(System.Random,DistantWorlds.Types.GameStartSettings,System.Collections.Generic.List`1[[Stride.Core.Mathematics.Point, Stride.Core.Mathematics, Version=4.2.0.28, Culture=neutral, PublicKeyToken=null]],System.Collections.Generic.List`1[[System.Single, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.Single&,System.Single&)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:DeterminePointRandomCircular(System.Random,DistantWorlds.Types.GameStartSettings,System.Single,System.Single&,System.Single&)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:DeterminePointRing(System.Random,DistantWorlds.Types.GameStartSettings,System.Single,System.Single,System.Single&,System.Single&)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:Generate(DistantWorlds.Types.GameStartSettings,System.Int32,Stride.Engine.Game,DistantWorlds.Types.GameSettings,System.Boolean,System.Boolean)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:Generate(DistantWorlds.Types.GameStartSettings,System.Int32,Stride.Engine.Game,DistantWorlds.Types.GameSettings,System.Boolean,System.Boolean)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateColonyAtOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.Race,System.Int64,System.Single,DistantWorlds.Types.Empire,System.Boolean,System.Boolean,System.Boolean)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateColonyForEmpire(DistantWorlds.Types.GameStartSettings,DistantWorlds.Types.Empire,System.Random,DistantWorlds.Types.Race,System.Collections.Generic.List`1[[DistantWorlds.Types.OrbCategory, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],System.Byte,System.Byte,Stride.Core.Mathematics.Vector2,System.Single,System.Single,System.Boolean,System.Boolean,System.Single,System.Int64,System.Single,System.Single,System.Single,System.Boolean,System.Boolean,System.Int64,System.Single,DistantWorlds.Types.Orb)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateColonyForEmpire(DistantWorlds.Types.GameStartSettings,DistantWorlds.Types.Empire,System.Random,DistantWorlds.Types.Race,System.Collections.Generic.List`1[[DistantWorlds.Types.OrbCategory, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],System.Byte,System.Byte,Stride.Core.Mathematics.Vector2,System.Single,System.Single,System.Boolean,System.Boolean,System.Single,System.Int64,System.Single,System.Single,System.Single,System.Boolean,System.Boolean,System.Int64,System.Single,DistantWorlds.Types.Orb)",
+      "kind": "prefix",
+      "effect": "changes-args"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateEmpire(DistantWorlds.Types.GameStartSettings,DistantWorlds.Types.GameStartSettingsEmpireList,DistantWorlds.Types.GameStartSettingsEmpire,System.Int16,System.Random,System.Single,DistantWorlds.Types.ResearchProjectList,System.Single,System.Single,System.Boolean,System.Boolean,DistantWorlds.Types.GameSettings,DistantWorlds.Types.LocationList&,DistantWorlds.Types.Orb,System.Collections.Generic.List`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]])",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateIndependentColonies(DistantWorlds.Types.GameStartSettings,System.Random,DistantWorlds.Types.Empire)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.OrbType,DistantWorlds.Types.OrbCategory,DistantWorlds.Types.OrbList,DistantWorlds.Types.StarSystem,DistantWorlds.Types.Location,System.Random,DistantWorlds.Types.ResourceList,DistantWorlds.Types.GameStartSettings)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.OrbType,DistantWorlds.Types.OrbCategory,DistantWorlds.Types.OrbList,DistantWorlds.Types.StarSystem,DistantWorlds.Types.Location,System.Random,DistantWorlds.Types.ResourceList,DistantWorlds.Types.GameStartSettings)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.OrbType,DistantWorlds.Types.OrbCategory,DistantWorlds.Types.OrbList,DistantWorlds.Types.StarSystem,DistantWorlds.Types.Location,System.Random,DistantWorlds.Types.ResourceList,DistantWorlds.Types.GameStartSettings,System.Int32)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.OrbType,DistantWorlds.Types.OrbCategory,DistantWorlds.Types.OrbList,DistantWorlds.Types.StarSystem,DistantWorlds.Types.Location,System.Random,DistantWorlds.Types.ResourceList,DistantWorlds.Types.GameStartSettings,System.Int32)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.OrbType,DistantWorlds.Types.OrbCategory,DistantWorlds.Types.OrbList,DistantWorlds.Types.StarSystem,DistantWorlds.Types.Location,System.Random,DistantWorlds.Types.ResourceList,System.Single,System.Int32)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.OrbType,DistantWorlds.Types.OrbCategory,DistantWorlds.Types.OrbList,DistantWorlds.Types.StarSystem,DistantWorlds.Types.Location,System.Random,DistantWorlds.Types.ResourceList,System.Single,System.Int32)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.OrbType,DistantWorlds.Types.OrbCategory,DistantWorlds.Types.OrbList,DistantWorlds.Types.StarSystem,DistantWorlds.Types.Location,System.Random,DistantWorlds.Types.ResourceList,System.Single,System.Int32,Stride.Core.Mathematics.Vector3,System.Int32,System.Int32)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateOrb(DistantWorlds.Types.Orb,DistantWorlds.Types.OrbType,DistantWorlds.Types.OrbCategory,DistantWorlds.Types.OrbList,DistantWorlds.Types.StarSystem,DistantWorlds.Types.Location,System.Random,DistantWorlds.Types.ResourceList,System.Single,System.Int32,Stride.Core.Mathematics.Vector3,System.Int32,System.Int32)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarClusters(DistantWorlds.Types.GameStartSettings,System.Random,System.Boolean,System.Collections.Generic.List`1[[Stride.Core.Mathematics.Point, Stride.Core.Mathematics, Version=4.2.0.28, Culture=neutral, PublicKeyToken=null]]&,System.Collections.Generic.List`1[[System.Single, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]&)",
+      "kind": "postfix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystem(System.Single,System.Single,DistantWorlds.Types.OrbType,System.Random,System.Boolean,DistantWorlds.Types.ResourceList,System.Boolean[]&,System.Boolean[]&,System.Single)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystem(System.Single,System.Single,DistantWorlds.Types.OrbType,System.Random,System.Boolean,DistantWorlds.Types.ResourceList,System.Boolean[]&,System.Boolean[]&,System.Single)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystem(System.Single,System.Single,DistantWorlds.Types.OrbType,System.Random,System.Boolean,DistantWorlds.Types.ResourceList,System.Boolean[]&,System.Boolean[]&,System.Single,System.String)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystem(System.Single,System.Single,DistantWorlds.Types.OrbType,System.Random,System.Boolean,DistantWorlds.Types.ResourceList,System.Boolean[]&,System.Boolean[]&,System.Single,System.String)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystem(System.Single,System.Single,System.Random,System.Boolean,DistantWorlds.Types.ResourceList,System.Boolean[]&,System.Boolean[]&,DistantWorlds.Types.GameStartSettings)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystem(System.Single,System.Single,System.Random,System.Boolean,DistantWorlds.Types.ResourceList,System.Boolean[]&,System.Boolean[]&,DistantWorlds.Types.GameStartSettings)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystem(System.Single,System.Single,System.Random,System.Boolean,DistantWorlds.Types.ResourceList,System.Boolean[]&,System.Boolean[]&,System.Single)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystem(System.Single,System.Single,System.Random,System.Boolean,DistantWorlds.Types.ResourceList,System.Boolean[]&,System.Boolean[]&,System.Single)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystems(DistantWorlds.Types.GameStartSettings,System.Random,System.Boolean)",
+      "kind": "finalizer",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:GenerateStarSystems(DistantWorlds.Types.GameStartSettings,System.Random,System.Boolean)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.Galaxy:UpdateAllVisibilityMapKnownData()",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.GameStartSettings:WriteToFile(DistantWorlds.Types.GameStartSettings,System.String)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.Types.OrbList:FindNearestByPathWithPrecalculatedSystemTimes(DistantWorlds.Types.Galaxy,DistantWorlds.Types.StarSystem,System.Collections.Generic.IDictionary`2[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Single, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],DistantWorlds.Types.StarSystemList,System.Single,DistantWorlds.Types.OrbTypeList,System.Collections.Generic.List`1[[DistantWorlds.Types.OrbCategory, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],DistantWorlds.Types.OrbTypeFactorList,System.Boolean,System.Boolean,System.Boolean)",
+      "kind": "postfix",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.OrbTypeFactorList:SelectRandomFactor(System.Random,System.Single)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.Types.StarSystemListExtensions:CalculateSystemTimes(DistantWorlds.Core.NonBlocking.ConcurrentDictionary`2[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[DistantWorlds.Types.StarSystem, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],DistantWorlds.Types.Galaxy,DistantWorlds.Types.Empire,DistantWorlds.Types.StarSystem,System.Single)",
+      "kind": "postfix",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.StarSystemListExtensions:CalculateSystemTimes(DistantWorlds.Core.NonBlocking.ConcurrentDictionary`2[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[DistantWorlds.Types.StarSystem, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],DistantWorlds.Types.Galaxy,System.Boolean[],DistantWorlds.Types.StarSystem,System.Single)",
+      "kind": "postfix",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.Types.TextResolver:GetText(System.String)",
+      "kind": "postfix",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:AddControlsToPanel(DistantWorlds.Types.Galaxy,DistantWorlds.Types.Empire,DistantWorlds.UI.DWPanel,System.Int32)",
+      "kind": "postfix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:BindData(Stride.Engine.Game,DistantWorlds.Types.GameStartSettings,System.EventHandler`1[[DistantWorlds.Types.DWEventArgs, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],System.EventHandler`1[[DistantWorlds.Types.DWEventArgs, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],System.EventHandler`1[[DistantWorlds.Types.DWEventArgs, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],DistantWorlds.Types.Galaxy)",
+      "kind": "postfix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:BindData(Stride.Engine.Game,DistantWorlds.Types.GameStartSettings,System.EventHandler`1[[DistantWorlds.Types.DWEventArgs, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],System.EventHandler`1[[DistantWorlds.Types.DWEventArgs, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],System.EventHandler`1[[DistantWorlds.Types.DWEventArgs, DistantWorlds.Types, Version=1.3.8.4, Culture=neutral, PublicKeyToken=null]],DistantWorlds.Types.Galaxy)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:GalaxySettingsChangedPreProcessCore(System.Boolean)",
+      "kind": "postfix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:Render(Stride.Rendering.RenderDrawContext,Stride.Graphics.SpriteBatch,Stride.Core.Mathematics.Point,System.Boolean)",
+      "kind": "prefix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:ResolveColonyPrevalence(System.Int32)",
+      "kind": "postfix",
+      "effect": "observes"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:ResolveColonyPrevalence(System.Int32)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:ResolveIndependentColonies(System.Int32)",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:SetColonyPrevalence(System.Single)",
+      "kind": "postfix",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:SetGalaxySizeLimits()",
+      "kind": "prefix",
+      "effect": "skips-original"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:SetIndependentColonies(System.Single)",
+      "kind": "postfix",
+      "effect": "changes-result"
+    },
+    {
+      "target": "DistantWorlds.UI.StartNewGameDialog:ShowSection(System.Int32)",
+      "kind": "postfix",
+      "effect": "observes"
+    }
+  ],
   "channels": [
     {
       "name": "settings-keeper.recall",
