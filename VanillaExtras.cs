@@ -52,7 +52,11 @@ internal static class VanillaExtras
     }
 
     // What the buttons say now, for Habitability (see Habitability.ButtonValue).
-    private static void RecordResolved(float __result) => Habitability.ButtonValue = __result;
+    private static void RecordResolved(float __result)
+    {
+        Habitability.ButtonValue = __result;
+        KeeperLink.Remember("HabitablePlanets", __result.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+    }
 
     private static void SetPrevalence(float value, ref int __result)
     {
@@ -60,8 +64,15 @@ internal static class VanillaExtras
         __result = value < Habitability.ScriptedOnlyBelow ? ExtraIndex : __result + 1;
     }
 
+    // Set when the Independent Colonies row already had a None button by the time this mod looked (see Extend).
+    private static volatile bool IndependentsHandledElsewhere;
+
     private static bool ResolveIndependents(ref int buttonIndex, ref float __result)
     {
+        if (IndependentsHandledElsewhere)
+        {
+            return true;
+        }
         if (buttonIndex == ExtraIndex)
         {
             __result = 0f;
@@ -73,6 +84,10 @@ internal static class VanillaExtras
 
     private static void SetIndependents(float value, ref int __result)
     {
+        if (IndependentsHandledElsewhere)
+        {
+            return;
+        }
         __result = value <= 0f ? ExtraIndex : __result + 1;
     }
     // Called once the dialog has built the colonization section.
@@ -90,6 +105,17 @@ internal static class VanillaExtras
             if (group == null)
             {
                 Bootstrap.Log($"VanillaExtras: {field} not found.");
+                return;
+            }
+            // Another mod (Independence Day) may already have put a None button in front: its own index mapping then stands, and this one
+            // neither adds a second button nor shifts the indices again.
+            if (group.Controls.OfType<DWButton>().Any(b => b.Name != null && b.Name.EndsWith(" None", StringComparison.Ordinal)))
+            {
+                if (field == "ColonizationIndependentColonyAmount")
+                {
+                    IndependentsHandledElsewhere = true;
+                }
+                Bootstrap.Log($"VanillaExtras: {field} already has a None button from another mod; left as it is.");
                 return;
             }
             float buttonWidth = UserInterfaceHelper.CalculateScaledValue(95f);

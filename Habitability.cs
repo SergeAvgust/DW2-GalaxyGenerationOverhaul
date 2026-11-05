@@ -73,6 +73,16 @@ internal static class Habitability
             harmony.Patch(pick, prefix: Own(nameof(PickPrefix)));
         }
 
+        MethodInfo? write = AccessTools.Method(typeof(GameStartSettings), "WriteToFile", new[] { typeof(GameStartSettings), typeof(string) });
+        if (write == null)
+        {
+            Bootstrap.Log("Habitability: GameStartSettings.WriteToFile not found; a saved setup may hold the quality factor.");
+        }
+        else
+        {
+            harmony.Patch(write, prefix: Own(nameof(WriteSetupPrefix)));
+        }
+
         MethodInfo? independents = AccessTools.Method(typeof(Galaxy), "GenerateIndependentColonies");
         if (independents == null)
         {
@@ -103,6 +113,28 @@ internal static class Habitability
         else
         {
             harmony.Patch(text, postfix: Own(nameof(TextPostfix)));
+        }
+    }
+
+    // The Habitable Planets button value is also kept by Settings Keeper in this mod's own name (see KeeperLink), as a second copy that the
+    // generation swap above can never touch; the screen puts it back into the settings just before it reads them.
+    public static void RestoreButtonValue(GameStartSettings settings)
+    {
+        if (settings != null && float.TryParse(KeeperLink.Recall("HabitablePlanets"), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out float value) && value > 0f)
+        {
+            settings.OrbQuality = value;
+        }
+    }
+
+    // Parameter names must match the original's so Harmony can bind them by name.
+    // Whoever writes the setup to a file (the game on exit, Settings Keeper's copy of it) must see the button value, not the quality factor
+    // that stands in for it while a galaxy is being generated.
+    private static void WriteSetupPrefix(GameStartSettings gameStartSettings)
+    {
+        if (gameStartSettings != null && ButtonValue > 0f && gameStartSettings.OrbQuality != ButtonValue)
+        {
+            gameStartSettings.OrbQuality = ButtonValue;
         }
     }
 

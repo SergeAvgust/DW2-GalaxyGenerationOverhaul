@@ -15,3 +15,6 @@ obj/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Script build output
+temp/
